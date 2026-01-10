@@ -1,6 +1,26 @@
 🕹️ Retro Arcade Server (Web-based Emulator Host)
 
+EmulatorJS 를 이용하여 라즈베리파이에 웹 게임서버를 구축합니다.
+************************************************************
+
+설치법
+1. EmulatorJS 를 다운받고 적당한 서버용 폴더를 만들고 하위에 /emulatorjs 폴더에 압축을 풉니다.
+2. 첨부된 emulator.min.js 를 ./emulatorjs/data/ 안에 overwrite 합니다.
+    - 수정사항 : 로컬서버의 파일만 서빙합니다.
+    - extractzip.js 대신 fflate.min.js 를 사용하므로 iPad 등에서 초고속 압축 해제가 가능합니다.
+    - fflate 는 https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.min.js 을 받아서 \emulatorjs\data\compression\fflate.min.js 로 저장하세요
+3. 게임은 편의적으로 폴더 mame, nds, snes, gba, neogeo 만 지원합니다. 다른 이름의 폴더의 롬은 fbneo가 실행 합니다.
+4. 이제 서버를 실행하여 :8080 포트로 접속되는지 확인합니다.
+5. 서버에서 "코어 동기화"를 누르면 자동으로 필수파일을 받습니다만 작동하지 않으면 ./emulatorjs 이하에 빠진 파일을 넣으세요.
+6. 필수는 아니지만 아이패드 등에서 게임 시작이 과도하게 느릴경우 https 서버인 caddy 를 설치할 필요가 있습니다. 아이패드의 보안 때문입니다.
+7. 코어는 코어 다운로드후 zip 으로 자동 재압축 합니다. 7z 파일은 아이패드에서 10배이상 느립니다.
+   
+**************************************************************
+
+- 이하 챗지피티의 자동 소개글 -
+
 Retro Arcade Server는 Go 언어로 작성된 경량화된 웹 에뮬레이터 호스팅 서버입니다.
+
 EmulatorJS를 기반으로 작동하며, 로컬 네트워크나 개인 서버에서 자신의 합법적인 게임 백업(ROM)을 브라우저를 통해 플레이할 수 있도록 돕는 개인용 아카이빙 도구입니다.
 
 이 프로젝트는 단순한 파일 서빙을 넘어, 에뮬레이터 코어의 자동 동기화, 세이브 파일의 서버 저장, BIOS/패치 파일의 실시간 병합(Injection) 기능을 제공합니다.
@@ -58,7 +78,7 @@ Go (1.18 버전 이상)
 1. 프로젝트 실행
 
 # 의존성 패키지 확인 (표준 라이브러리 위주라 별도 설치 불필요 가능성 높음)
-go mod init retro-server
+go mod init svr
 go mod tidy
 
 # 서버 실행
@@ -84,11 +104,8 @@ go run svr.go
 │   │   ├── snes/
 │   │   └── ...
 │   ├── saves/            # [자동] 세이브 파일 저장소
-│   ├── cores/            # [자동] 다운로드된 코어 데이터
-│   ├── bookmark.json     # [자동] 즐겨찾기 목록
-│   ├── core_sync.json    # [자동] 동기화 타임스탬프
-│   └── injected.json     # [자동] 인젝트 로그
-└── emulatorjs/           # [자동] 에뮬레이터 정적 리소스 (JS, CSS, WASM)
+│   └── cores/            # [자동] 다운로드된 코어 데이터
+└── emulatorjs/           # [자동] 에뮬레이터 넣는곳
 
 
 참고: data/roms 폴더 내에 시스템 이름(예: snes, gba)으로 폴더를 만들고 ROM 파일을 넣으면 서버가 자동으로 인식합니다. 시스템 이름은 index.html 내 coreMap 설정과 일치해야 합니다.
