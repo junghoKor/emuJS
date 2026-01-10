@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+
+    <link rel="manifest" href='data:application/manifest+json;base64,ewogICAgIm5hbWUiOiAiUmV0cm8gQXJjYWRlIiwKICAgICJzaG9ydF9uYW1lIjogIlJldHJvIiwKICAgICJzdGFydF91cmwiOiAiLiIsCiAgICAiZGlzcGxheSI6ICJmdWxsc2NyZWVuIiwKICAgICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMwMDAwMDAiLAogICAgInRoZW1lX2NvbG9yIjogIiMwMDAwMDAiLAogICAgIm9yaWVudGF0aW9uIjogImxhbmRzY2FwZSIKfQ=='>
+
+    <title>Retro Arcade Server</title>
+    
+    <style>
+        /* =========================================
+           1. CSS Variables & Global Reset
+           ========================================= */
+        :root {
+            --primary-color: #E55B5B;
+            --bg-color: #ECEFF1;
+            --header-bg: linear-gradient(135deg, #E68A60, #D95053);
+            --card-bg: #ffffff;
+            --text-color: #2C3E50;
+            --sub-text-color: #546E7A;
+        }
+
+        body { 
+            background: var(--bg-color); 
+            color: var(--text-color); 
+            font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; 
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            overflow-x: hidden;
+            overscroll-behavior: none; /* 모바일 스크롤 바운스 방지 */
+            touch-action: pan-y;
+        }
+
+        /* =========================================
+           2. Header & Layout
+           ========================================= */
+        header { 
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 25px;
+            background: var(--header-bg); 
+            color: white;
+            box-shadow: 0 4px 12px rgba(217, 80, 83, 0.25);
+            /* Safe Area 대응 */
+            padding-top: max(10px, env(safe-area-inset-top));
+            padding-left: max(25px, env(safe-area-inset-left));
+            padding-right: max(25px, env(safe-area-inset-right));
+        }
+
+        .header-title { display: flex; align-items: baseline; gap: 10px; }
+        h1 { margin: 0; font-size: 1.3rem; letter-spacing: 0.5px; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); }
+        
+        #system-info { font-size: 0.85rem; color: rgba(255,255,255,0.95); font-family: monospace; }
+        #system-info span { color: #fff; font-weight: bold; background: rgba(0,0,0,0.15); padding: 2px 6px; border-radius: 4px;}
+
+        /* =========================================
+           3. Buttons
+           ========================================= */
+        .btn-group { display: flex; gap: 10px; }
+        .btn {
+            background: #fff; color: #D95053; padding: 6px 14px; font-size: 0.85rem;
+            border: none; border-radius: 20px;
+            cursor: pointer; font-weight: bold; transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+            display: flex; align-items: center; gap: 5px;
+        }
+        .btn:hover { background: #fff5f5; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12); }
+        .btn-yellow { color: #F57C00; }
+        .btn-yellow:hover { background: #FFF3E0; }
+
+        /* =========================================
+           4. Game List & Cards
+           ========================================= */
+        .category { padding: 10px 25px; animation: fadeIn 0.4s ease-out; }
+        .category-title { 
+            font-size: 1.0rem; color: var(--text-color); 
+            border-left: 5px solid var(--primary-color); 
+            padding-left: 10px; margin: 15px 0 8px 0; 
+            text-transform: uppercase; font-weight: 800;
+            display: flex; align-items: center;
+        }
+        .game-count {
+            font-size: 0.8rem; color: #78909C; margin-left: 8px; font-weight: normal;
+            background: #CFD8DC; padding: 1px 6px; border-radius: 10px;
+        }
+
+        .rom-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); 
+            gap: 8px;
+        }
+
+        .rom-card { 
+            background: var(--card-bg); 
+            padding: 5px 8px 10px 8px; 
+            border-radius: 8px; 
+            text-align: center; cursor: pointer; 
+            border: 1px solid #E0E0E0;
+            transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            min-height: auto; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            position: relative; 
+            
+            /* 텍스트 선택 및 롱프레스 메뉴 방지 */
+            user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+        }
+
+        .rom-card:hover { 
+            border-color: var(--primary-color); transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(229, 91, 91, 0.15);
+        }
+        .rom-card.last-played {
+            background: #F1F8E9; border: 2px solid #7CB342;
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(124, 179, 66, 0.3);
+        }
+        .rom-name { 
+            font-weight: 600; word-break: break-all; font-size: 0.8rem; 
+            line-height: 1.2; color: var(--text-color);
+        }
+
+        /* Badge & Gauge */
+        .last-played-badge {
+            position: absolute; top: -8px; right: -5px;
+            background: #7CB342; color: white;
+            font-size: 0.7rem; font-weight: bold;
+            padding: 2px 8px; border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 10; animation: bounceIn 0.5s;
+        }
+        .size-gauge {
+            position: absolute; bottom: 3px; left: 8px; right: 8px;
+            width: auto; height: 2px;
+            display: flex; flex-direction: row-reverse; justify-content: flex-start; gap: 1px;
+            pointer-events: none;
+        }
+        .gauge-dot { flex: 1; height: 2px; border-radius: 1px; background-color: #EEE; transition: background-color 0.3s; }
+
+        /* =========================================
+           5. Game View Overlay
+           ========================================= */
+        #game-view { 
+            display: none; 
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            width: 100%; height: 100%;
+            background: #000; z-index: 1000;
+            cursor: none; /* 기본 커서 숨김 */
+        }
+        #game-view.show-cursor { cursor: default; }
+
+        /* 상단 컨트롤 버튼 공통 */
+        .game-ctrl-btn {
+            position: absolute; top: 10px; z-index: 2000;
+            background: transparent; border: none; cursor: pointer;
+            opacity: 0.3; transition: opacity 0.3s, transform 0.2s;
+            padding: 10px; pointer-events: auto;
+            top: max(10px, env(safe-area-inset-top));
+        }
+        .game-ctrl-btn:hover { opacity: 1.0; transform: scale(1.1); }
+        .game-ctrl-btn svg { width: 40px; height: 40px; fill: white; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+
+        #refresh-btn {
+            right: max(10px, env(safe-area-inset-right));
+        }
+        #refresh-btn:hover { transform: scale(1.1) rotate(90deg); }
+
+        #fs-check-btn {
+            right: max(60px, env(safe-area-inset-right));
+        }
+
+        /* =========================================
+           6. Components (Toast, Menu, Modal)
+           ========================================= */
+        /* Toast */
+        #toast {
+            visibility: hidden; min-width: 250px;
+            background-color: rgba(20, 20, 20, 0.6); 
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            color: #fff; text-align: center;
+            border-radius: 8px; padding: 12px 24px; 
+            position: fixed; z-index: 2000; left: 50%; bottom: 30px; 
+            transform: translateX(-50%) translateY(20px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.08);
+            opacity: 0; transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            font-size: 0.95rem; font-weight: 500; white-space: pre-line;
+            pointer-events: none;
+        }
+        #toast.show { visibility: visible; opacity: 1; bottom: 50px; transform: translateX(-50%) translateY(0); }
+
+        /* Context Menu */
+        #context-menu {
+            display: none; position: absolute; z-index: 3000;
+            background: white; border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); padding: 5px 0;
+            min-width: 150px; overflow: hidden; border: 1px solid #eee;
+        }
+        .ctx-item {
+            padding: 10px 15px; font-size: 0.9rem; color: #333; cursor: pointer;
+            display: flex; align-items: center; gap: 8px; transition: background 0.2s;
+        }
+        .ctx-item:hover { background-color: #f5f5f5; color: var(--primary-color); }
+        .ctx-item.delete { color: #e74c3c; }
+        .ctx-item.delete:hover { background-color: #ffebee; }
+        .icon { width: 16px; text-align: center; }
+
+        /* Password Modal */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); z-index: 4000;
+            justify-content: center; align-items: center;
+        }
+        .modal-box {
+            background: white; padding: 20px; border-radius: 12px;
+            width: 300px; text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); animation: fadeIn 0.2s;
+        }
+        .modal-title { margin: 0 0 15px 0; font-size: 1.1rem; color: #D95053; font-weight: bold; }
+        .modal-desc { margin-bottom: 20px; font-size: 0.9rem; color: #555; word-break: break-all;}
+        .modal-input {
+            width: 80%; padding: 10px; margin-bottom: 15px;
+            border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; text-align: center;
+        }
+        .modal-input:focus { border-color: var(--primary-color); outline: none; }
+        .modal-btns { display: flex; gap: 10px; justify-content: center; }
+
+        /* FS Modal 스타일 */
+        #fs-modal .modal-box {
+            width: 85%; max-width: 600px; height: 70vh;
+            display: flex; flex-direction: column;
+        }
+        #fs-content {
+            flex: 1; text-align: left; background: #f1f3f4; 
+            padding: 10px; margin: 10px 0; border-radius: 4px;
+            border: 1px solid #ccc; overflow: auto; 
+            font-family: monospace; font-size: 12px;
+            white-space: pre;
+            user-select: text; -webkit-user-select: text; 
+        }
+
+        /* Animations */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes bounceIn { 0% { transform: scale(0); } 80% { transform: scale(1.1); } 100% { transform: scale(1.1); } }
+    </style>
+</head>
+<body>
+
+<div id="main-ui">
+    <header>
+        <div class="header-title">
+            <h1>👾 RETRO ARCADE</h1>
+            <span id="system-info">Loading...</span>
+        </div>
+        <div class="btn-group">
+            <button id="view-toggle-btn" class="btn btn-yellow" onclick="App.toggleView()">★ 즐겨찾기</button>
+            <button class="btn" onclick="App.downloadCores()">📥 코어 동기화</button>
+        </div>
+    </header>
+    <div id="content"></div>
+</div>
+
+<div id="game-view">
+    <button id="fs-check-btn" class="game-ctrl-btn" onclick="App.checkFS()" title="파일 시스템 확인(Check FS)">
+        <svg viewBox="0 0 24 24">
+            <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-5 3c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm4 8h-8v-1c0-1.33 2.67-2 4-2s4 .67 4 2v1z"/>
+        </svg>
+    </button>
+    
+    <button id="refresh-btn" class="game-ctrl-btn" onclick="App.closeGame()" title="나가기(Exit)">
+        <svg viewBox="0 0 24 24">
+            <path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+        </svg>
+    </button>
+    <div id="game" style="width:100%; height:100%;"></div>
+</div>
+
+<div id="toast"></div>
+<div id="context-menu"></div>
+
+<div id="password-modal" class="modal-overlay">
+    <div class="modal-box">
+        <h3 class="modal-title">⚠️ 파일 삭제 확인</h3>
+        <p id="modal-desc" class="modal-desc"></p>
+        <input type="password" id="modal-pw" class="modal-input" placeholder="비밀번호 입력" maxlength="10">
+        <div class="modal-btns">
+            <button class="btn" onclick="App.execDelete()">삭제</button>
+            <button class="btn" onclick="App.closeModal()">취소</button>
+        </div>
+    </div>
+</div>
+
+<!-- 파일 시스템 확인 모달 -->
+<div id="fs-modal" class="modal-overlay">
+    <div class="modal-box">
+        <h3 class="modal-title">📂 File System Structure</h3>
+        <div id="fs-content"></div>
+        <div class="modal-btns">
+            <button class="btn" onclick="App.closeFSModal()">닫기</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    /**
+     * =========================================================
+     * [설정 및 상수 정의]
+     * =========================================================
+     */
+    const coreMap = { 
+        neogeo: "fbneo",
+        fbneo:  "fbneo", 
+        mame:   "mame2003_plus", 
+        snes:   "snes9x", 
+        gba:    "mgba", 
+        nds:    "melonds",
+        psx:    "mednafen_psx_hw"
+    };
+
+    const CORE_FOLDER_MAP = {
+        'mgba': 'mGBA',      
+        'melonds': 'melonDS' 
+    };
+
+    const CONFIG = {
+        biosMap: {
+            neogeo: "", 
+            psx:    "/data/bios/scph5501.bin"
+        },
+        useAdditionalFiles: true,
+        paths: {
+            roms: "/data/roms",
+            ejsData: "/emulatorjs/data/" 
+        }
+    };
+
+    // [중요] 인젝트 설정: 시스템별 병합할 파일 목록
+    const INJECT = {
+        neogeo: [
+            "/data/bios/neogeo_small.zip" 
+        ]
+    };
+
+    function showToast(message, isError = false) {
+        const toast = document.getElementById("toast");
+        toast.innerText = message;
+        toast.style.color = isError ? "#FFCDD2" : "#E8F5E9";
+        toast.style.borderColor = isError ? "rgba(239, 83, 80, 0.4)" : "rgba(102, 187, 106, 0.4)";
+        toast.className = "show";
+        setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 1500);
+    }
+
+    /**
+     * =========================================================
+     * [App] UI 및 비즈니스 로직
+     * =========================================================
+     */
+    const App = {
+        currentView: 'library', 
+        cachedRoms: null,       
+        inGame: false,          
+        deleteTarget: null,     
+        cursorTimer: null,      
+        
+        init: function() {
+            this.updateSystemInfo();
+            const lastView = localStorage.getItem('lastViewMode');
+            if (lastView === 'bookmark') {
+                this.loadBookmarks();
+            } else {
+                this.loadLibrary();
+            }
+            this.setupCursorControl();
+            document.addEventListener('click', () => {
+                if (this.inGame) return; 
+                const menu = document.getElementById('context-menu');
+                if (menu.style.display === 'block') menu.style.display = 'none';
+            });
+        },
+
+        setupCursorControl: function() {
+            const view = document.getElementById('game-view');
+            view.addEventListener('mousemove', () => {
+                view.classList.add('show-cursor');
+                if (this.cursorTimer) clearTimeout(this.cursorTimer);
+                this.cursorTimer = setTimeout(() => {
+                    view.classList.remove('show-cursor');
+                }, 3000);
+            });
+        },
+
+        updateSystemInfo: async function() {
+            try {
+                const res = await fetch('/api/disk');
+                if (!res.ok) throw new Error("Network error");
+                const data = await res.json();
+                const toGB = (b) => (b / (1024**3)).toFixed(1);
+                const percent = ((data.free / data.total) * 100).toFixed(1);
+                document.getElementById('system-info').innerHTML = 
+                    `DISK FREE <span>${toGB(data.free)}G</span>/${toGB(data.total)}G (${percent}%)`;
+            } catch (e) { console.error("Disk info error:", e); }
+        },
+
+        toggleView: function() {
+            if (this.currentView === 'library') this.loadBookmarks();
+            else this.loadLibrary();
+        },
+
+        loadLibrary: async function() {
+            this.currentView = 'library';
+            localStorage.setItem('lastViewMode', 'library');
+
+            const btn = document.getElementById('view-toggle-btn');
+            if(btn) btn.innerText = "★ 즐겨찾기";
+
+            try {
+                const res = await fetch('/api/roms');
+                const data = await res.json();
+                this.cachedRoms = data;
+
+                const container = document.getElementById('content');
+                container.innerHTML = '';
+
+                Object.keys(data).forEach(sys => {
+                    if (!data[sys]?.length) return;
+                    const section = document.createElement('div');
+                    section.className = 'category';
+                    const count = data[sys].length;
+                    section.innerHTML = `<div class="category-title">${sys} <span class="game-count">(${count})</span></div>`;
+                    const grid = document.createElement('div');
+                    grid.className = 'rom-grid';
+                    
+                    data[sys].forEach(romData => {
+                        const card = this.createCard(sys, romData);
+                        grid.appendChild(card);
+                    });
+                    section.appendChild(grid);
+                    container.appendChild(section);
+                });
+
+                setTimeout(() => {
+                    const target = document.getElementById('last-played-target');
+                    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 300);
+
+            } catch (e) { console.error("Library load error:", e); }
+        },
+
+        loadBookmarks: async function() {
+            this.currentView = 'bookmark';
+            localStorage.setItem('lastViewMode', 'bookmark');
+
+            const btn = document.getElementById('view-toggle-btn');
+            if(btn) btn.innerText = "📚 모두보기";
+
+            try {
+                if (!this.cachedRoms) {
+                    const r = await fetch('/api/roms');
+                    this.cachedRoms = await r.json();
+                }
+
+                const res = await fetch('/api/bookmark');
+                const bookmarks = await res.json();
+                const container = document.getElementById('content');
+                container.innerHTML = '';
+
+                if (!bookmarks || bookmarks.length === 0) {
+                     container.innerHTML = '<div style="text-align:center; padding:50px; color:#aaa;">즐겨찾기된 게임이 없습니다.</div>';
+                     return;
+                }
+
+                const grouped = {};
+                bookmarks.forEach(item => {
+                    const sys = item.system || "Unknown";
+                    if (!grouped[sys]) grouped[sys] = [];
+                    grouped[sys].push(item.rom); 
+                });
+
+                Object.keys(grouped).sort().forEach(sys => {
+                    const section = document.createElement('div');
+                    section.className = 'category';
+                    section.innerHTML = `<div class="category-title" style="border-left-color: #F57C00;">
+                        ${sys} <span class="game-count">(${grouped[sys].length})</span>
+                    </div>`;
+                    
+                    const grid = document.createElement('div');
+                    grid.className = 'rom-grid';
+                    
+                    grouped[sys].forEach(romName => {
+                        let romSize = 0;
+                        if (this.cachedRoms && this.cachedRoms[sys]) {
+                            const found = this.cachedRoms[sys].find(r => r.name === romName);
+                            if (found) romSize = found.size;
+                        }
+                        const card = this.createCard(sys, { name: romName, size: romSize });
+                        grid.appendChild(card);
+                    });
+                    
+                    section.appendChild(grid);
+                    container.appendChild(section);
+                });
+
+            } catch (e) {
+                console.error("Bookmark load error:", e);
+                showToast("즐겨찾기 로드 실패", true);
+            }
+        },
+
+        createCard: function(sys, romData) {
+            let romName, romSize = 0;
+            if (typeof romData === 'object' && romData !== null) {
+                romName = romData.name;
+                romSize = romData.size || 0;
+            } else {
+                romName = romData;
+            }
+
+            const card = document.createElement('div');
+            card.className = 'rom-card';
+            card.innerHTML = `<span class="rom-name">${romName.replace(/\.[^/.]+$/, "").toUpperCase()}</span>`;
+            
+            if (romSize > 0) {
+                const gauge = document.createElement('div');
+                gauge.className = 'size-gauge';
+                const mb = romSize / (1024 * 1024);
+                let activeDots = Math.max(1, Math.min(20, Math.ceil(mb))); 
+
+                for(let i=1; i<=20; i++) {
+                    const dot = document.createElement('div');
+                    dot.className = 'gauge-dot';
+                    if (i <= activeDots) {
+                        const hue = 240 - ((i - 1) / 19 * 240);
+                        dot.style.backgroundColor = `hsl(${hue}, 90%, 60%)`;
+                    }
+                    gauge.appendChild(dot);
+                }
+                card.appendChild(gauge);
+            }
+
+            try {
+                const globalLast = JSON.parse(localStorage.getItem('lastPlayedGlobal'));
+                let isGlobal = false;
+                
+                if (globalLast && globalLast.sys === sys && globalLast.rom === romName) {
+                    isGlobal = true;
+                    card.classList.add('last-played');
+                    card.id = 'last-played-target';
+                    this.addBadge(card);
+                }
+                if (!isGlobal) {
+                    const localLastRom = localStorage.getItem('lastPlayedLocal_' + sys);
+                    if (localLastRom === romName) this.addBadge(card);
+                }
+            } catch (e) {}
+
+            let longPressTimer;
+            let isLongPress = false;
+
+            card.addEventListener('touchstart', (e) => {
+                isLongPress = false; 
+                longPressTimer = setTimeout(() => {
+                    isLongPress = true; 
+                    if (navigator.vibrate) navigator.vibrate(50);
+                    const touch = e.touches[0];
+                    this.showContextMenu(touch.pageX, touch.pageY, sys, romName);
+                }, 1000); 
+            }, { passive: true });
+
+            card.addEventListener('touchend', () => clearTimeout(longPressTimer));
+            card.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+
+            card.onclick = () => {
+                if (isLongPress) { isLongPress = false; return; }
+                Launcher.run(sys, romName);
+            };
+
+            card.oncontextmenu = (e) => {
+                e.preventDefault();
+                this.showContextMenu(e.pageX, e.pageY, sys, romName);
+            };
+            
+            return card;
+        },
+
+        addBadge: function(card) {
+            const badge = document.createElement('div');
+            badge.className = 'last-played-badge';
+            badge.innerText = "▶ LAST";
+            card.appendChild(badge);
+        },
+
+        showContextMenu: function(x, y, sys, rom) {
+            const menu = document.getElementById('context-menu');
+            menu.style.display = 'block';
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+
+            const safeSys = sys.replace(/'/g, "\\'");
+            const safeRom = rom.replace(/'/g, "\\'");
+            let html = '';
+
+            if (this.currentView === 'library') {
+                html += `<div class="ctx-item" onclick="App.addBookmark('${safeSys}', '${safeRom}')"><span class="icon">★</span> 즐겨찾기 추가</div>`;
+                html += `<div class="ctx-item delete" onclick="App.deleteRom('${safeSys}', '${safeRom}')"><span class="icon">🗑️</span> 파일 삭제</div>`;
+            } else {
+                html += `<div class="ctx-item" onclick="App.removeBookmark('${safeSys}', '${safeRom}')"><span class="icon">💔</span> 즐겨찾기 해제</div>`;
+            }
+            menu.innerHTML = html;
+        },
+
+        addBookmark: async function(sys, rom) {
+            try {
+                await fetch('/api/bookmark', { method: 'POST', body: JSON.stringify({ system: sys, rom: rom }) });
+                showToast("★ 즐겨찾기에 추가되었습니다!");
+            } catch(e) { showToast("추가 실패", true); }
+        },
+
+        removeBookmark: async function(sys, rom) {
+            try {
+                await fetch('/api/bookmark', { method: 'DELETE', body: JSON.stringify({ system: sys, rom: rom }) });
+                showToast("💔 즐겨찾기 해제 완료");
+                this.loadBookmarks(); 
+            } catch(e) { showToast("해제 실패", true); }
+        },
+
+        deleteRom: function(sys, rom) {
+            this.deleteTarget = { sys, rom };
+            const modal = document.getElementById('password-modal');
+            const desc = document.getElementById('modal-desc');
+            const input = document.getElementById('modal-pw');
+            
+            desc.innerText = `${rom}\n파일을 영구적으로 삭제하시겠습니까?`;
+            input.value = ''; 
+            modal.style.display = 'flex'; 
+            input.focus();
+        },
+
+        closeModal: function() {
+            document.getElementById('password-modal').style.display = 'none';
+            this.deleteTarget = null;
+        },
+
+        execDelete: async function() {
+            const input = document.getElementById('modal-pw');
+            if (input.value !== "1") {
+                showToast("⛔ 비밀번호가 올바르지 않습니다.", true);
+                input.value = ''; input.focus();
+                return;
+            }
+
+            if (!this.deleteTarget) return;
+            const { sys, rom } = this.deleteTarget;
+            this.closeModal();
+
+            try {
+                const safeRom = encodeURIComponent(rom).replace(/[!'()*]/g, function(c) {
+                    return '%' + c.charCodeAt(0).toString(16);
+                });
+                const res = await fetch(`/api/rom?sys=${encodeURIComponent(sys)}&rom=${safeRom}`, { method: 'DELETE' });
+                
+                if (res.ok) {
+                    showToast("🗑️ 파일이 삭제되었습니다.");
+                    this.loadLibrary(); 
+                } else { showToast("삭제 실패 (서버 오류)", true); }
+            } catch(e) { showToast("오류 발생", true); }
+        },
+
+        downloadCores: async function() {
+            const btn = document.querySelector('.btn-group .btn:last-child');
+            const originText = btn.innerText;
+            btn.innerText = "⏳ 다운로드 중...";
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/download-cores');
+                const msg = await res.text();
+                
+                const versionMatch = msg.match(/\[VERSION:(\d+)\]/);
+                if (versionMatch && versionMatch[1]) {
+                    localStorage.setItem('coreVersion', versionMatch[1]);
+                }
+                alert(msg.replace(/\[VERSION:\d+\]/, "")); 
+            } catch (err) { alert("통신 실패: " + err); } 
+            finally { btn.innerText = originText; btn.disabled = false; }
+        },
+
+        closeGame: function() {
+            if (Launcher.monitorInterval) {
+                clearInterval(Launcher.monitorInterval);
+                Launcher.monitorInterval = null;
+            }
+            App.inGame = false;
+
+            try {
+                if (document.fullscreenElement || document.webkitFullscreenElement) {
+                    if (document.exitFullscreen) document.exitFullscreen();
+                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                }
+            } catch(e) { console.error("Exit Fullscreen error:", e); }
+
+            location.reload(); 
+        },
+
+        checkFS: function() {
+            if (!window.EJS_emulator || !window.EJS_emulator.Module || !window.EJS_emulator.Module.FS) {
+                alert("Emulator FS가 아직 로드되지 않았습니다.");
+                return;
+            }
+
+            const FS = window.EJS_emulator.Module.FS;
+            let output = "=== FS Structure (/) ===\n";
+            let count = 0;
+            const MAX_ITEMS = 5000; 
+
+            function walk(dir, level) {
+                if (count > MAX_ITEMS) return;
+
+                try {
+                    const files = FS.readdir(dir);
+                    files.sort(); 
+
+                    for (const file of files) {
+                        if (file === '.' || file === '..') continue;
+                        if (count > MAX_ITEMS) {
+                            output += `\n... (출력 제한 초과: ${MAX_ITEMS}개 이상)\n`;
+                            return;
+                        }
+
+                        const fullPath = dir === '/' ? '/' + file : dir + '/' + file;
+                        let stat;
+                        try { stat = FS.stat(fullPath); } catch(e) { continue; }
+
+                        const indent = "  ".repeat(level);
+                        
+                        if (FS.isDir(stat.mode)) {
+                            output += `${indent}📂 ${file}\n`;
+                            walk(fullPath, level + 1);
+                        } else {
+                            output += `${indent}📄 ${file} (${stat.size} b)\n`;
+                            count++;
+                        }
+                    }
+                } catch (e) {
+                    output += "  ".repeat(level) + `[Access Denied] ${dir}\n`;
+                }
+            }
+
+            walk('/', 0);
+            
+            document.getElementById('fs-content').textContent = output || "비어있음";
+            document.getElementById('fs-modal').style.display = 'flex';
+        },
+
+        closeFSModal: function() {
+            document.getElementById('fs-modal').style.display = 'none';
+        },
+
+        restoreMainView: function() {
+            const btnRefresh = document.getElementById('refresh-btn');
+            const btnFS = document.getElementById('fs-check-btn');
+            const view = document.getElementById('game-view');
+            
+            if(view) {
+                if(btnRefresh && btnRefresh.parentElement !== view) view.appendChild(btnRefresh);
+                if(btnFS && btnFS.parentElement !== view) view.appendChild(btnFS);
+            }
+
+            document.getElementById('game-view').style.display = 'none';
+            document.getElementById('main-ui').style.display = 'block';
+
+            Launcher.cleanup();
+            App.inGame = false;
+        }
+    };
+
+    /**
+     * =========================================================
+     * [Launcher] EmulatorJS 실행 및 관리
+     * =========================================================
+     */
+    const Launcher = {
+        monitorInterval: null,
+        currentSavePath: null,
+        lastSaveMtime: 0,
+
+        // [변경] 인젝트 요청 및 실행 로직
+        run: async function(sys, rom) {
+            App.inGame = true;
+            if (document.activeElement) document.activeElement.blur();
+            window.focus();
+
+            const newGameName = `${sys}-${rom}`;
+            
+            try {
+                localStorage.setItem('lastPlayedGlobal', JSON.stringify({ sys: sys, rom: rom }));
+                localStorage.setItem('lastPlayedLocal_' + sys, rom);
+            } catch (e) {}
+
+            if (window.EJS_gameName && window.EJS_gameName !== newGameName) this.cleanup();
+
+            document.getElementById('main-ui').style.display = 'none';
+            document.getElementById('game-view').style.display = 'block';
+            document.getElementById('game-view').classList.remove('show-cursor');
+            window.scrollTo(0, 0); 
+
+            const gameEl = document.getElementById('game');
+            gameEl.style.height = '100%'; gameEl.style.width = '100%';
+            
+            const selectedCore = coreMap[sys] || "fbneo";
+            if (this.monitorInterval) { clearInterval(this.monitorInterval); this.monitorInterval = null; }
+
+            const oldLoader = document.getElementById('ejs-loader');
+            if (oldLoader) oldLoader.remove();
+            
+            gameEl.innerHTML = ''; 
+
+            window.EJS_player = "#game";
+            window.EJS_core = selectedCore;
+            window.EJS_gameName = newGameName;
+            window.EJS_DEBUG_XX = false;
+            window.EJS_disableDatabases = true;
+            window.EJS_browserMode = "browserMode";
+            
+            window.EJS_paths = {
+                "loader.js":        "/emulatorjs/data/loader.js",
+                "version.json":     "/emulatorjs/data/version.json",
+                "GameManager.js":   "/emulatorjs/data/src/GameManager.js",
+                "gamepad.js":       "/emulatorjs/data/src/gamepad.js",
+                "nipplejs.js":      "/emulatorjs/data/src/nipplejs.js",
+                "shaders.js":       "/emulatorjs/data/src/shaders.js",
+                "socket.io.min.js": "/emulatorjs/data/src/socket.io.min.js",
+                "storage.js":       "/emulatorjs/data/src/storage.js",
+                "emulator.js":      "/emulatorjs/data/src/emulator.js",
+                "emulator.css":     "/emulatorjs/data/emulator.css",
+                "compression.js":   "/emulatorjs/data/src/compression.js",
+                "fflate.min.js":    "/emulatorjs/data/src/fflate.min.js",
+            };
+            
+            window.EJS_pathtodata = CONFIG.paths.ejsData;
+            window.EJS_coreUrl = window.EJS_pathtodata + "cores/"; 
+            
+            // [신규] 인젝트 API 호출 및 대기
+            if (INJECT[sys] && INJECT[sys].length > 0) {
+                showToast("⚙️ BIOS 병합 확인 중...", false);
+                try {
+                    const injectPaths = INJECT[sys].join(',');
+                    // 서버에 인젝트 요청 (서버가 원본 파일을 수정함)
+                    const res = await fetch(`/api/rom/inject?sys=${sys}&rom=${rom}&inject=${encodeURIComponent(injectPaths)}`);
+                    if (!res.ok) throw new Error("Inject request failed");
+                    // 성공 시 별도 다운로드 없이 원본 경로 그대로 사용
+                    console.log("[Launcher] Inject sync complete.");
+                } catch (e) {
+                    console.error("[Launcher] Injection error:", e);
+                    showToast("⚠️ 병합 실패. 원본으로 실행합니다.", true);
+                }
+            }
+
+            // URL은 항상 원본 경로 사용 (서버가 덮어썼으므로)
+            window.EJS_gameUrl = `${CONFIG.paths.roms}/${sys}/${rom}`;
+            
+            // 바이오스 설정 무력화 (이미 병합됨)
+            window.EJS_biosUrl = null;
+            window.EJS_externalFiles = null;
+
+            window.EJS_fixedSaveInterval = 120000;
+            window.EJS_gamepad = true;
+            
+            window.EJS_defaultControls = {
+                0: {
+                    0: { 'value': 'x', 'value2': 'BUTTON_2' },
+                    1: { 'value': 's', 'value2': 'BUTTON_4' },
+                    2: { 'value': 'v', 'value2': 'SELECT' },
+                    3: { 'value': 'enter', 'value2': 'START' },
+                    4: { 'value': 'up arrow', 'value2': 'LEFT_STICK_Y:-1' },
+                    5: { 'value': 'down arrow', 'value2': 'LEFT_STICK_Y:+1' },
+                    6: { 'value': 'left arrow', 'value2': 'LEFT_STICK_X:-1' },
+                    7: { 'value': 'right arrow', 'value2': 'LEFT_STICK_X:+1' },
+                    8: { 'value': 'z', 'value2': 'BUTTON_1' },
+                    9: { 'value': 'a', 'value2': 'BUTTON_3' },
+                    10: { 'value': 'q', 'value2': 'LEFT_TOP_SHOULDER' },
+                    11: { 'value': 'e', 'value2': 'LEFT_BOTTOM_SHOULDER' },
+                    12: { 'value': 'tab' }, 13: { 'value': 'r' },
+                    19: { 'value': '', 'value2': 'DPAD_UP' },
+                    18: { 'value': '', 'value2': 'DPAD_DOWN' },                    
+                    17: { 'value': '', 'value2': 'DPAD_LEFT' },
+                    16: { 'value': 'h', 'value2': 'DPAD_RIGHT' },
+                    24: { 'value': '1' }, 25: { 'value': '2' }, 26: { 'value': '3' },
+                    27: { 'value': 'add', 'value2': 'RIGHT_TOP_SHOULDER' },
+                    28: { 'value': 'space' }, 29: { 'value': 'subtract' },
+                }, 1: {}, 2: {}, 3: {}
+            };
+            
+            window.EJS_defaultOptions = {
+                'shader': 'crt-easymode.glslp',
+                'save-state-location': 'none', 
+                'input_force_gamepad_poll': 'true', 
+                'worker': 'false', 
+                'input_player1_analog_dpad_mode': '1',
+                'webgl2Enabled': 'enabled',
+            };
+            window.EJS_threads = false;
+            window.EJS_graphic = "webgl";
+            window.EJS_webgl2 = true;
+            
+            this.setupEventHandlers();
+            window.EJS_startOnLoaded = true;
+            
+            const coreVersion = localStorage.getItem('coreVersion') || Date.now();
+            const loader = document.createElement('script');
+            loader.id = 'ejs-loader';
+            loader.src = window.EJS_pathtodata + "loader.js?v=" + coreVersion;
+            document.body.appendChild(loader);
+        },
+
+        cleanup: function() {
+            const btnRefresh = document.getElementById('refresh-btn');
+            const btnFS = document.getElementById('fs-check-btn');
+            const view = document.getElementById('game-view');
+            
+            if(view) {
+                if(btnRefresh && btnRefresh.parentElement !== view) view.appendChild(btnRefresh);
+                if(btnFS && btnFS.parentElement !== view) view.appendChild(btnFS);
+            }
+
+            try {
+                if(window.EJS_emulator?.audio?.context) {
+                    window.EJS_emulator.audio.context.suspend();
+                    window.EJS_emulator.audio.context.close();
+                }
+            } catch(e){}
+
+            try {
+                const gameDiv = document.getElementById('game');
+                if (gameDiv) gameDiv.innerHTML = '';
+                const loader = document.getElementById('ejs-loader');
+                if (loader) loader.remove();
+
+                window.EJS_emulator = null;
+                window.EJS_gameName = null;
+            } catch(e) { console.error("Cleanup error:", e); }
+        },
+
+        setupEventHandlers: function() {
+            window.EJS_ready = () => {
+                console.log("✅ [EJS] Core Ready.");
+                if (window.EJS_emulator) {
+                    window.EJS_emulator.on("saveState", this.handleSaveState);
+                    window.EJS_emulator.on("loadState", this.handleLoadState); 
+                    window.EJS_emulator.on("save", this.handleGameSave);
+                }
+            };
+
+            window.EJS_onGameStart = () => {
+                console.log("🚀 [EJS] Game Started!");
+                setTimeout(() => {
+                    const canvas = document.querySelector("#game canvas");
+                    if (canvas) { canvas.tabIndex = 0; canvas.focus(); } 
+                    else window.focus();
+                }, 100);
+
+                setTimeout(() => {
+                    const btnRefresh = document.getElementById('refresh-btn');
+                    const btnFS = document.getElementById('fs-check-btn');
+                    const gameDiv = document.getElementById('game');
+                    if(gameDiv) {
+                        if(btnRefresh) gameDiv.appendChild(btnRefresh);
+                        if(btnFS) gameDiv.appendChild(btnFS);
+                    }
+                }, 500);
+
+                setTimeout(() => {
+                    this.injectSaveData(true);
+                    setTimeout(() => this.startSaveMonitor(), 2000);
+                }, 1000);
+            };
+        },
+
+        startSaveMonitor: function() {
+            if (this.monitorInterval) clearInterval(this.monitorInterval);
+            this.monitorInterval = setInterval(() => {
+                if (document.hidden) return;
+                if (!window.EJS_emulator?.Module?.FS || !this.currentSavePath) return;
+                
+                try {
+                    const FS = window.EJS_emulator.Module.FS;
+                    const stat = FS.stat(this.currentSavePath);
+                    const currentMtime = stat.mtime.getTime();
+
+                    if (this.lastSaveMtime === 0) {
+                        this.lastSaveMtime = currentMtime;
+                        return;
+                    }
+
+                    if (currentMtime > this.lastSaveMtime) {
+                        console.log("💾 [Monitor] Change detected. Syncing...");
+                        this.lastSaveMtime = currentMtime;
+                        this.exportSave(true); 
+                    }
+                } catch (e) {}
+            }, 5000);
+        },
+
+        injectSaveData: async function(shouldReload = false) {
+            const serverFilename = window.EJS_gameName + ".sav";
+            const data = await this.fetchSaveData(serverFilename);
+            
+            if (window.EJS_emulator?.Module?.FS) {
+                const FS = window.EJS_emulator.Module.FS;
+                const romFull = window.EJS_gameUrl.split('/').pop(); 
+                const romName = romFull.replace(/\.[^/.]+$/, "");
+                const coreFolder = CORE_FOLDER_MAP[window.EJS_core] || window.EJS_core;
+                const targetPath = `/data/saves/${coreFolder}/${romName}.srm`;
+                this.currentSavePath = targetPath;
+
+                if (data) {
+                    try { FS.mkdir('/data'); FS.mkdir('/data/saves'); FS.mkdir(`/data/saves/${coreFolder}`); } catch(e){}
+                    try {
+                        FS.writeFile(targetPath, data);
+                        try { this.lastSaveMtime = FS.stat(targetPath).mtime.getTime(); } catch(err) { this.lastSaveMtime = Date.now(); }
+                    } catch(e) { console.error("Write failed:", e); }
+
+                    if (shouldReload) {
+                        if(window.EJS_emulator.gameManager?.loadSaveFiles) window.EJS_emulator.gameManager.loadSaveFiles();
+                        showToast(`📂 세이브 동기화 완료\n(${coreFolder}/${romName}.srm)`);
+                    }
+                } else { console.log("⚠️ 새 게임 시작"); }
+            }
+        },
+
+        importSave: async function() {
+            if (!confirm("⚠️ 주의: 현재 상태가 서버 데이터로 덮어씌워집니다.")) return;
+            const data = await this.fetchSaveData(window.EJS_gameName + ".sav");
+            if (!data) { showToast("⚠️ 서버에 저장된 파일 없음", true); return; }
+
+            const FS = window.EJS_emulator.Module.FS;
+            FS.writeFile(this.currentSavePath, data);
+            if (window.EJS_emulator.gameManager?.loadSaveFiles) window.EJS_emulator.gameManager.loadSaveFiles();
+            showToast(`✅ 세이브 가져오기 성공!`);
+        },
+
+        exportSave: async function(skipFlush = false) {
+            if (!window.EJS_emulator?.gameManager) return;
+
+            try {
+                if (!skipFlush && window.EJS_emulator.gameManager.saveSaveFiles) window.EJS_emulator.gameManager.saveSaveFiles();
+                
+                const data = window.EJS_emulator.gameManager.getSaveFile();
+                if (!data) { if(!skipFlush) showToast("⚠️ 저장할 데이터 없음", true); return; }
+
+                const success = await this.uploadSaveData(window.EJS_gameName + ".sav", data);
+                if (success) {
+                    if (skipFlush) showToast("☁️ 자동 동기화 완료");
+                    else showToast("✅ 서버 저장 완료!");
+                } else { showToast("❌ 서버 저장 실패", true); }
+            } catch (e) { console.error("Export Error:", e); }
+        },
+
+        handleGameSave: async function(event) {
+            let data = event.content || event;
+            if (!data) return;
+            if(await Launcher.uploadSaveData(window.EJS_gameName + ".sav", data)) showToast("💾 자동 저장 완료!");
+        },
+
+        handleSaveState: async function(event) {
+            let data = event.state || (event.length > 1 ? event[1] : event);
+            if (!data) return;
+            if(await Launcher.uploadSaveData(window.EJS_gameName + ".state", data)) showToast("💾 상태 저장 완료!");
+            else showToast("❌ 상태 저장 실패", true);
+        },
+
+        handleLoadState: async function() {
+            const data = await Launcher.fetchSaveData(window.EJS_gameName + ".state");
+            if (!data) { alert("⚠️ 저장된 상태 파일이 없습니다."); return; }
+            if (window.EJS_emulator.gameManager?.loadState) {
+                window.EJS_emulator.gameManager.loadState(data);
+                showToast("📂 상태 로드 완료!");
+            }
+        },
+
+        uploadSaveData: async function(filename, data) {
+            try {
+                await fetch(`/api/save?name=${encodeURIComponent(filename)}`, { method: 'POST', body: data });
+                return true;
+            } catch (e) { return false; }
+        },
+
+        fetchSaveData: async function(filename) {
+            try {
+                const res = await fetch(`/api/load?name=${encodeURIComponent(filename)}&t=${Date.now()}`);
+                if (!res.ok) return null;
+                const buf = await res.arrayBuffer();
+                return new Uint8Array(buf);
+            } catch (e) { return null; }
+        }
+    };
+
+    window.addEventListener('keydown', (e) => {
+        if (e.key === "F5" || e.key === "Escape") {
+            e.preventDefault(); e.stopPropagation();
+            location.reload();
+        }
+    }, { capture: true });
+
+    App.init();
+</script>
+</body>
+</html>
