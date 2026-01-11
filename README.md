@@ -16,8 +16,7 @@ EmulatorJS 를 이용하여 라즈베리파이에 웹 게임서버를 구축합�
 7. 코어는 코어 다운로드후 zip 으로 자동 재압축 합니다. 7z 파일은 아이패드에서 10배이상 느립니다.
 
 < 폴더는 반드시 상기 구조를 가져야 함 >
-<img width="571" height="320" alt="image" src="https://github.com/user-attachments/assets/f2451e12-0056-4cff-a55e-f19be7ea007f" />
-
+<img width="781" height="335" alt="image" src="https://github.com/user-attachments/assets/c4f34ea2-d589-4e7f-98b1-44ccad98746e" />
    
 **************************************************************
 
@@ -104,11 +103,12 @@ go run svr.go
 ├── index.html            # 웹 인터페이스 (Frontend)
 ├── data/
 │   ├── roms/             # [사용자] 게임 ROM 파일 위치
-│   │   ├── nes/          # (예: data/roms/nes/mario.zip)
-│   │   ├── snes/
-│   │   └── ...
-│   ├── saves/            # [자동] 세이브 파일 저장소
-│   └── cores/            # [자동] 다운로드된 코어 데이터
+│   │   ├── fbneo/        # fbneo로 구동하는 롬 (예: 서버/data/roms/fbneo/1943.zip)
+│   │   ├── snes/         # snes9x 로 구동
+│   │   ├── gba/          # mgba 로 구동
+│   │   └── mame/         # mame2003plus 레퍼런스롬만!
+│   │   └── neogeo/       # fbneo 용 레퍼런스 롬만!
+│   └── saves/            # [자동] 세이브 파일 저장소
 └── emulatorjs/           # [자동] 에뮬레이터 넣는곳
 
 
