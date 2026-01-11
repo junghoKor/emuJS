@@ -2,9 +2,11 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <!-- viewport-fit=cover 추가: 노치/상태바 영역까지 확장 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <!-- black-translucent: 상태바를 투명하게 만들고 내용을 그 위로 올림 -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#000000">
 
@@ -156,7 +158,7 @@
         .game-ctrl-btn {
             position: absolute; top: 10px; z-index: 2000;
             background: transparent; border: none; cursor: pointer;
-            opacity: 0.3; transition: opacity 0.3s, transform 0.2s;
+            opacity: 0.1; transition: opacity 0.3s, transform 0.2s;
             padding: 10px; pointer-events: auto;
             top: max(10px, env(safe-area-inset-top));
         }
@@ -166,10 +168,13 @@
         #refresh-btn {
             right: max(10px, env(safe-area-inset-right));
         }
-        #refresh-btn:hover { transform: scale(1.1) rotate(90deg); }
-
+        /* [요청사항 반영] 나가기 버튼 2배 확대 */
+        #refresh-btn svg { width: 80px; height: 80px; }
+        
         #fs-check-btn {
             right: max(60px, env(safe-area-inset-right));
+            /* [요청사항 반영] 폴더 구조 버튼 숨김 */
+            display: none !important;
         }
 
         /* =========================================
@@ -272,7 +277,8 @@
     
     <button id="refresh-btn" class="game-ctrl-btn" onclick="App.closeGame()" title="나가기(Exit)">
         <svg viewBox="0 0 24 24">
-            <path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+            <!-- [수정] 오른쪽으로 나가는 아이콘 (Right Exit Icon) -->
+            <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
         </svg>
     </button>
     <div id="game" style="width:100%; height:100%;"></div>
@@ -374,6 +380,10 @@
                 this.loadLibrary();
             }
             this.setupCursorControl();
+
+            // [추가] iPad/iOS 리스트 화면 풀스크린 설정 호출
+            this.setupListFullscreen();
+
             document.addEventListener('click', () => {
                 if (this.inGame) return; 
                 const menu = document.getElementById('context-menu');
@@ -381,15 +391,44 @@
             });
         },
 
+        // [추가] 리스트 화면에서 첫 터치 시 전체 화면 전환 (노치/상태바 제거)
+        setupListFullscreen: function() {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            if (!isIOS) return;
+
+            const enterFullscreen = () => {
+                // 게임 중이거나 이미 전체 화면이면 중단
+                if (this.inGame || document.fullscreenElement || document.webkitFullscreenElement) return;
+
+                const doc = document.documentElement;
+                if (doc.webkitRequestFullscreen) {
+                    doc.webkitRequestFullscreen();
+                } else if (doc.requestFullscreen) {
+                    doc.requestFullscreen().catch(() => {});
+                }
+            };
+
+            // 사용자 인터랙션(터치/클릭)이 발생할 때 전체 화면 시도
+            const events = ['touchstart', 'click'];
+            const handler = () => {
+                enterFullscreen();
+                // 한 번 실행 후 리스너 제거 (불필요한 호출 방지)
+                events.forEach(ev => document.body.removeEventListener(ev, handler));
+            };
+
+            events.forEach(ev => document.body.addEventListener(ev, handler, { passive: true }));
+        },
+
         setupCursorControl: function() {
             const view = document.getElementById('game-view');
+            // [최적화] 마우스 이동 이벤트에 딜레이를 주어 과도한 호출 방지
             view.addEventListener('mousemove', () => {
                 view.classList.add('show-cursor');
                 if (this.cursorTimer) clearTimeout(this.cursorTimer);
                 this.cursorTimer = setTimeout(() => {
                     view.classList.remove('show-cursor');
                 }, 3000);
-            });
+            }, { passive: true });
         },
 
         updateSystemInfo: async function() {
@@ -784,6 +823,7 @@
         monitorInterval: null,
         currentSavePath: null,
         lastSaveMtime: 0,
+        isSaving: false, // [추가] 중복 저장 방지 플래그
 
         // [변경] 인젝트 요청 및 실행 로직
         run: async function(sys, rom) {
@@ -805,6 +845,20 @@
             document.getElementById('game-view').classList.remove('show-cursor');
             window.scrollTo(0, 0); 
 
+            // [FIX: iPad/iOS Fullscreen Update] 
+            // 아이패드/iPhone에서 홈 화면 실행 시 상단바(시계) 제거를 위해 documentElement 전체화면 시도
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+            if (isIOS) {
+                const doc = document.documentElement; 
+                // iOS Safari는 webkit 접두사 우선 사용 권장
+                if (doc.webkitRequestFullscreen) {
+                    doc.webkitRequestFullscreen();
+                } else if (doc.requestFullscreen) {
+                    doc.requestFullscreen().catch(() => {});
+                }
+            }
+
             const gameEl = document.getElementById('game');
             gameEl.style.height = '100%'; gameEl.style.width = '100%';
             
@@ -821,7 +875,7 @@
             window.EJS_gameName = newGameName;
             window.EJS_DEBUG_XX = false;
             window.EJS_disableDatabases = true;
-            window.EJS_browserMode = "browserMode";
+            //window.EJS_browserMode = "browserMode";
             
             window.EJS_paths = {
                 "loader.js":        "/emulatorjs/data/loader.js",
@@ -869,48 +923,55 @@
             
             window.EJS_defaultControls = {
                 0: {
-                    0: { 'value': 'x', 'value2': 'BUTTON_2' },
-                    1: { 'value': 's', 'value2': 'BUTTON_4' },
+                    0: { 'value': 'x', 'value2': 'BUTTON_1' },
+                    1: { 'value': 's', 'value2': 'RIGHT_BOTTOM_SHOULDER' },
                     2: { 'value': 'v', 'value2': 'SELECT' },
                     3: { 'value': 'enter', 'value2': 'START' },
                     4: { 'value': 'up arrow', 'value2': 'LEFT_STICK_Y:-1' },
                     5: { 'value': 'down arrow', 'value2': 'LEFT_STICK_Y:+1' },
                     6: { 'value': 'left arrow', 'value2': 'LEFT_STICK_X:-1' },
                     7: { 'value': 'right arrow', 'value2': 'LEFT_STICK_X:+1' },
-                    8: { 'value': 'z', 'value2': 'BUTTON_1' },
+                    8: { 'value': 'z', 'value2': 'BUTTON_2' },
                     9: { 'value': 'a', 'value2': 'BUTTON_3' },
-                    10: { 'value': 'q', 'value2': 'LEFT_TOP_SHOULDER' },
-                    11: { 'value': 'e', 'value2': 'LEFT_BOTTOM_SHOULDER' },
+                    10: { 'value': 'q', 'value2': 'BUTTON_4' }, 
+                    11: { 'value': 'e', 'value2': 'RIGHT_TOP_SHOULDER' },
                     12: { 'value': 'tab' }, 13: { 'value': 'r' },
                     19: { 'value': '', 'value2': 'DPAD_UP' },
                     18: { 'value': '', 'value2': 'DPAD_DOWN' },                    
                     17: { 'value': '', 'value2': 'DPAD_LEFT' },
                     16: { 'value': 'h', 'value2': 'DPAD_RIGHT' },
                     24: { 'value': '1' }, 25: { 'value': '2' }, 26: { 'value': '3' },
-                    27: { 'value': 'add', 'value2': 'RIGHT_TOP_SHOULDER' },
+                    27: { 'value': 'add', 'value2': 'SELECT' },
                     28: { 'value': 'space' }, 29: { 'value': 'subtract' },
                 }, 1: {}, 2: {}, 3: {}
             };
             
             window.EJS_defaultOptions = {
                 'shader': 'crt-easymode.glslp',
-                'save-state-location': 'none', 
-                'input_force_gamepad_poll': 'true', 
+                'save-state-location': 'browser', //'none', 
+                // [최적화] 강제 폴링 제거 (끊김 원인 가능성)
+                // 'input_force_gamepad_poll': 'true', 
                 'worker': 'false', 
-                'input_player1_analog_dpad_mode': '1',
+                //'input_player1_analog_dpad_mode': '1',
                 'webgl2Enabled': 'enabled',
             };
             window.EJS_threads = false;
             window.EJS_graphic = "webgl";
             window.EJS_webgl2 = true;
             
-            this.setupEventHandlers();
-            window.EJS_startOnLoaded = true;
+			window.EJS_startOnLoaded = true;
+            // [중요] 이미 위에서 수동으로 Fullscreen을 요청했으므로, 
+            // EJS가 로드 후 다시 요청하다가 에러나는 것을 방지하기 위해 false로 설정
+			window.EJS_fullscreenOnLoaded = false;
+			window.EJS_backgroundColor = '#000'
             
             const coreVersion = localStorage.getItem('coreVersion') || Date.now();
             const loader = document.createElement('script');
             loader.id = 'ejs-loader';
             loader.src = window.EJS_pathtodata + "loader.js?v=" + coreVersion;
+
+            this.setupEventHandlers();
+
             document.body.appendChild(loader);
         },
 
@@ -979,9 +1040,11 @@
 
         startSaveMonitor: function() {
             if (this.monitorInterval) clearInterval(this.monitorInterval);
-            this.monitorInterval = setInterval(() => {
+            // [최적화] 5초 -> 30초로 주기 변경 (메인 스레드 부하 감소)
+            this.monitorInterval = setInterval(async () => {
                 if (document.hidden) return;
-                if (!window.EJS_emulator?.Module?.FS || !this.currentSavePath) return;
+                // [최적화] 이미 저장 중이거나 에뮬레이터가 준비되지 않았으면 스킵
+                if (this.isSaving || !window.EJS_emulator?.Module?.FS || !this.currentSavePath) return;
                 
                 try {
                     const FS = window.EJS_emulator.Module.FS;
@@ -996,10 +1059,10 @@
                     if (currentMtime > this.lastSaveMtime) {
                         console.log("💾 [Monitor] Change detected. Syncing...");
                         this.lastSaveMtime = currentMtime;
-                        this.exportSave(true); 
+                        await this.exportSave(true); 
                     }
                 } catch (e) {}
-            }, 5000);
+            }, 30000); // 30초마다 확인
         },
 
         injectSaveData: async function(shouldReload = false) {
@@ -1042,19 +1105,30 @@
 
         exportSave: async function(skipFlush = false) {
             if (!window.EJS_emulator?.gameManager) return;
+            if (this.isSaving) return; // 중복 실행 방지
+            
+            this.isSaving = true;
 
             try {
                 if (!skipFlush && window.EJS_emulator.gameManager.saveSaveFiles) window.EJS_emulator.gameManager.saveSaveFiles();
                 
+                // getSaveFile()은 동기적으로 실행되며 큰 데이터 처리 시 렉 유발 가능
                 const data = window.EJS_emulator.gameManager.getSaveFile();
-                if (!data) { if(!skipFlush) showToast("⚠️ 저장할 데이터 없음", true); return; }
+                if (!data) { 
+                    if(!skipFlush) showToast("⚠️ 저장할 데이터 없음", true); 
+                    return; 
+                }
 
                 const success = await this.uploadSaveData(window.EJS_gameName + ".sav", data);
                 if (success) {
                     if (skipFlush) showToast("☁️ 자동 동기화 완료");
                     else showToast("✅ 서버 저장 완료!");
                 } else { showToast("❌ 서버 저장 실패", true); }
-            } catch (e) { console.error("Export Error:", e); }
+            } catch (e) { 
+                console.error("Export Error:", e); 
+            } finally {
+                this.isSaving = false; // 플래그 해제
+            }
         },
 
         handleGameSave: async function(event) {
