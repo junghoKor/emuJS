@@ -2,11 +2,9 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <!-- viewport-fit=cover 추가: 노치/상태바 영역까지 확장 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <!-- black-translucent: 상태바를 투명하게 만들고 내용을 그 위로 올림 -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#000000">
 
@@ -277,7 +275,6 @@
     
     <button id="refresh-btn" class="game-ctrl-btn" onclick="App.closeGame()" title="나가기(Exit)">
         <svg viewBox="0 0 24 24">
-            <!-- [수정] 오른쪽으로 나가는 아이콘 (Right Exit Icon) -->
             <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
         </svg>
     </button>
@@ -299,7 +296,6 @@
     </div>
 </div>
 
-<!-- 파일 시스템 확인 모달 -->
 <div id="fs-modal" class="modal-overlay">
     <div class="modal-box">
         <h3 class="modal-title">📂 File System Structure</h3>
@@ -336,7 +332,7 @@
             neogeo: "", 
             psx:    "/data/bios/scph5501.bin"
         },
-        useAdditionalFiles: true,
+        useAdditionalFiles: false,
         paths: {
             roms: "/data/roms",
             ejsData: "/emulatorjs/data/" 
@@ -814,19 +810,109 @@
         }
     };
 
-    /**
+ /**
      * =========================================================
-     * [Launcher] EmulatorJS 실행 및 관리
+     * [IndexedDB] 로컬 State 저장소 (대용량 바이너리 저장 지원)
+     * =========================================================
+     */
+/**
+     * =========================================================
+     * [IndexedDB] 로컬 State 저장소 (디버깅 강화판)
+     * =========================================================
+     */
+    const LocalStateStore = {
+        dbName: 'RetroArcade_States',
+        storeName: 'states',
+        db: null,
+
+        init: function() {
+            return new Promise((resolve, reject) => {
+                if (this.db) return resolve(this.db);
+                
+                // 시크릿 모드 등에서 IndexedDB 사용 불가 체크
+                if (!window.indexedDB) {
+                    alert("이 브라우저는 IndexedDB를 지원하지 않거나 차단되었습니다. (시크릿 모드 해제 필요)");
+                    return reject("IndexedDB not supported");
+                }
+
+                const request = indexedDB.open(this.dbName, 1);
+                
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(this.storeName)) {
+                        db.createObjectStore(this.storeName);
+                    }
+                };
+                
+                request.onsuccess = (e) => {
+                    this.db = e.target.result;
+                    resolve(this.db);
+                };
+                
+                request.onerror = (e) => {
+                    console.error("🔥 IndexedDB Open Error:", e.target.error);
+                    reject(e.target.error);
+                };
+            });
+        },
+
+        save: async function(key, data) {
+            try {
+                await this.init();
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(this.storeName, 'readwrite');
+                    const store = tx.objectStore(this.storeName);
+                    
+                    // 데이터 유효성 검사
+                    if (!data) {
+                        console.error("❌ 저장할 데이터가 비어있습니다.");
+                        return reject("Empty Data");
+                    }
+
+                    const req = store.put(data, key);
+                    
+                    req.onsuccess = () => resolve(true);
+                    req.onerror = (e) => {
+                        console.error("🔥 IDB Put Error:", e.target.error);
+                        reject(e.target.error);
+                    };
+                });
+            } catch (err) {
+                console.error("🔥 LocalStateStore Save Exception:", err);
+                return false;
+            }
+        },
+
+        load: async function(key) {
+            try {
+                await this.init();
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(this.storeName, 'readonly');
+                    const store = tx.objectStore(this.storeName);
+                    const req = store.get(key);
+                    
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = (e) => {
+                        console.error("🔥 IDB Get Error:", e.target.error);
+                        resolve(null);
+                    };
+                });
+            } catch (err) { return null; }
+        }
+    };
+
+ /**
+     * =========================================================
+     * [Launcher] EmulatorJS 실행 및 관리 (최종 수정: State 오류 해결)
      * =========================================================
      */
     const Launcher = {
         monitorInterval: null,
         currentSavePath: null,
         lastSaveMtime: 0,
-        isSaving: false, // [추가] 중복 저장 방지 플래그
+        isSaving: false,
 
-        // [변경] 인젝트 요청 및 실행 로직
-        run: async function(sys, rom) {
+run: async function(sys, rom) {
             App.inGame = true;
             if (document.activeElement) document.activeElement.blur();
             window.focus();
@@ -845,18 +931,12 @@
             document.getElementById('game-view').classList.remove('show-cursor');
             window.scrollTo(0, 0); 
 
-            // [FIX: iPad/iOS Fullscreen Update] 
-            // 아이패드/iPhone에서 홈 화면 실행 시 상단바(시계) 제거를 위해 documentElement 전체화면 시도
+            // iOS Fullscreen
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
             if (isIOS) {
                 const doc = document.documentElement; 
-                // iOS Safari는 webkit 접두사 우선 사용 권장
-                if (doc.webkitRequestFullscreen) {
-                    doc.webkitRequestFullscreen();
-                } else if (doc.requestFullscreen) {
-                    doc.requestFullscreen().catch(() => {});
-                }
+                if (doc.webkitRequestFullscreen) doc.webkitRequestFullscreen();
+                else if (doc.requestFullscreen) doc.requestFullscreen().catch(() => {});
             }
 
             const gameEl = document.getElementById('game');
@@ -873,9 +953,8 @@
             window.EJS_player = "#game";
             window.EJS_core = selectedCore;
             window.EJS_gameName = newGameName;
-            window.EJS_DEBUG_XX = false;
-            window.EJS_disableDatabases = true;
-            //window.EJS_browserMode = "browserMode";
+            window.EJS_DEBUG_XX = true;
+            window.EJS_disableDatabases = false;
             
             window.EJS_paths = {
                 "loader.js":        "/emulatorjs/data/loader.js",
@@ -895,15 +974,13 @@
             window.EJS_pathtodata = CONFIG.paths.ejsData;
             window.EJS_coreUrl = window.EJS_pathtodata + "cores/"; 
             
-            // [신규] 인젝트 API 호출 및 대기
+            // BIOS Inject
             if (INJECT[sys] && INJECT[sys].length > 0) {
                 showToast("⚙️ BIOS 병합 확인 중...", false);
                 try {
                     const injectPaths = INJECT[sys].join(',');
-                    // 서버에 인젝트 요청 (서버가 원본 파일을 수정함)
                     const res = await fetch(`/api/rom/inject?sys=${sys}&rom=${rom}&inject=${encodeURIComponent(injectPaths)}`);
                     if (!res.ok) throw new Error("Inject request failed");
-                    // 성공 시 별도 다운로드 없이 원본 경로 그대로 사용
                     console.log("[Launcher] Inject sync complete.");
                 } catch (e) {
                     console.error("[Launcher] Injection error:", e);
@@ -911,59 +988,147 @@
                 }
             }
 
-            // URL은 항상 원본 경로 사용 (서버가 덮어썼으므로)
             window.EJS_gameUrl = `${CONFIG.paths.roms}/${sys}/${rom}`;
-            
-            // 바이오스 설정 무력화 (이미 병합됨)
             window.EJS_biosUrl = null;
             window.EJS_externalFiles = null;
 
             window.EJS_fixedSaveInterval = 120000;
             window.EJS_gamepad = true;
+
+			// 시스템 체크 (가독성을 위해 배열 includes 사용 권장, 기존 로직 유지)
+			if (sys === 'nds' || sys === 'neogeo' || sys === 'gba' || sys === 'cps123') {
+				window.EJS_defaultControls = {
+					0: {
+						0: { 'value': 'x', 'value2': 'BUTTON_2' },
+						1: { 'value': 's', 'value2': 'RIGHT_BOTTOM_SHOULDER' },
+						2: { 'value': 'v', 'value2': 'SELECT' },
+						3: { 'value': 'enter', 'value2': 'START' },
+						4: { 'value': 'up arrow', 'value2': 'LEFT_STICK_Y:-1' },
+						5: { 'value': 'down arrow', 'value2': 'LEFT_STICK_Y:+1' },
+						6: { 'value': 'left arrow', 'value2': 'LEFT_STICK_X:-1' },
+						7: { 'value': 'right arrow', 'value2': 'LEFT_STICK_X:+1' },
+						8: { 'value': 'z', 'value2': 'BUTTON_1' },
+						9: { 'value': 'a', 'value2': 'BUTTON_3' },
+						10: { 'value': 'q', 'value2': 'LEFT_TOP_SHOULDER' },
+						11: { 'value': 'e', 'value2': 'LEFT_BOTTOM_SHOULDER' },
+						12: { 'value': 'tab' },
+						13: { 'value': 'r' },
+						16: { 'value': 'h', 'value2': 'DPAD_RIGHT' },
+						17: { 'value': '', 'value2': 'DPAD_LEFT' },
+						18: { 'value': '', 'value2': 'DPAD_DOWN' },
+						19: { 'value': '', 'value2': 'DPAD_UP' },
+						24: { 'value': '1' },
+						25: { 'value': '2' },
+						26: { 'value': '3' },
+						27: { 'value': 'add', 'value2': 'GAMEPAD_16' },
+						28: { 'value': 'space' },
+						29: { 'value': 'subtract' }
+					},
+					1: {}, 2: {}, 3: {}
+				};
+			} else {  // snes, shooting, mame
+				window.EJS_defaultControls = {
+					0: {
+						0: { 'value': 'x', 'value2': 'BUTTON_1' },
+						1: { 'value': 's', 'value2': 'BUTTON_3' },
+						2: { 'value': 'v', 'value2': 'SELECT' },
+						3: { 'value': 'enter', 'value2': 'START' },
+						4: { 'value': 'up arrow', 'value2': 'LEFT_STICK_Y:-1' },
+						5: { 'value': 'down arrow', 'value2': 'LEFT_STICK_Y:+1' },
+						6: { 'value': 'left arrow', 'value2': 'LEFT_STICK_X:-1' },
+						7: { 'value': 'right arrow', 'value2': 'LEFT_STICK_X:+1' },
+						8: { 'value': 'z', 'value2': 'BUTTON_2' },
+						9: { 'value': 'a', 'value2': 'BUTTON_4' },
+						10: { 'value': 'q', 'value2': 'RIGHT_TOP_SHOULDER' },
+						11: { 'value': 'e', 'value2': 'RIGHT_BOTTOM_SHOULDER' },
+						12: { 'value': 'tab' },
+						13: { 'value': 'r' },
+						16: { 'value': 'h', 'value2': 'DPAD_RIGHT' },
+						17: { 'value': '', 'value2': 'DPAD_LEFT' },
+						18: { 'value': '', 'value2': 'DPAD_DOWN' },
+						19: { 'value': '', 'value2': 'DPAD_UP' },
+						24: { 'value': '1' },
+						25: { 'value': '2' },
+						26: { 'value': '3' },
+						27: { 'value': 'add', 'value2': 'GAMEPAD_16' },
+						28: { 'value': 'space' },
+						29: { 'value': 'subtract' }
+					},
+					1: {}, 2: {}, 3: {}
+				};
+			}
+			
+			
+			
             
-            window.EJS_defaultControls = {
-                0: {
-                    0: { 'value': 'x', 'value2': 'BUTTON_1' },
-                    1: { 'value': 's', 'value2': 'RIGHT_BOTTOM_SHOULDER' },
-                    2: { 'value': 'v', 'value2': 'SELECT' },
-                    3: { 'value': 'enter', 'value2': 'START' },
-                    4: { 'value': 'up arrow', 'value2': 'LEFT_STICK_Y:-1' },
-                    5: { 'value': 'down arrow', 'value2': 'LEFT_STICK_Y:+1' },
-                    6: { 'value': 'left arrow', 'value2': 'LEFT_STICK_X:-1' },
-                    7: { 'value': 'right arrow', 'value2': 'LEFT_STICK_X:+1' },
-                    8: { 'value': 'z', 'value2': 'BUTTON_2' },
-                    9: { 'value': 'a', 'value2': 'BUTTON_3' },
-                    10: { 'value': 'q', 'value2': 'BUTTON_4' }, 
-                    11: { 'value': 'e', 'value2': 'RIGHT_TOP_SHOULDER' },
-                    12: { 'value': 'tab' }, 13: { 'value': 'r' },
-                    19: { 'value': '', 'value2': 'DPAD_UP' },
-                    18: { 'value': '', 'value2': 'DPAD_DOWN' },                    
-                    17: { 'value': '', 'value2': 'DPAD_LEFT' },
-                    16: { 'value': 'h', 'value2': 'DPAD_RIGHT' },
-                    24: { 'value': '1' }, 25: { 'value': '2' }, 26: { 'value': '3' },
-                    27: { 'value': 'add', 'value2': 'SELECT' },
-                    28: { 'value': 'space' }, 29: { 'value': 'subtract' },
-                }, 1: {}, 2: {}, 3: {}
-            };
-            
+ // [수정 1] 저장 위치를 'memory'로 변경
+            // 'none'은 저장을 아예 안 하게 만들고, 'browser'는 내부 DB 충돌 가능성이 있음.
+            // 'memory'로 하면 에뮬레이터는 성공했다고 판단하고 데이터를 우리에게 넘겨줌.
             window.EJS_defaultOptions = {
                 'shader': 'crt-easymode.glslp',
-                'save-state-location': 'browser', //'none', 
-                // [최적화] 강제 폴링 제거 (끊김 원인 가능성)
-                // 'input_force_gamepad_poll': 'true', 
+                'save-state-location': 'memory', 
                 'worker': 'false', 
-                //'input_player1_analog_dpad_mode': '1',
                 'webgl2Enabled': 'enabled',
             };
+            
             window.EJS_threads = false;
             window.EJS_graphic = "webgl";
             window.EJS_webgl2 = true;
             
-			window.EJS_startOnLoaded = true;
-            // [중요] 이미 위에서 수동으로 Fullscreen을 요청했으므로, 
-            // EJS가 로드 후 다시 요청하다가 에러나는 것을 방지하기 위해 false로 설정
-			window.EJS_fullscreenOnLoaded = false;
-			window.EJS_backgroundColor = '#000'
+            // [수정 2] 훅 함수: 반환값 true 유지
+            window.EJS_onSaveState = function(data) {
+                console.log("⚡ [Hook] EJS_onSaveState called.", data);
+                
+                // 데이터 추출
+                let blob = null;
+                if (data instanceof Uint8Array) {
+                    blob = data;
+                } else if (data && data.state instanceof Uint8Array) {
+                    blob = data.state;
+                } else if (data && typeof data === 'object') {
+                    blob = Object.values(data).find(v => v instanceof Uint8Array);
+                }
+
+                if (blob) {
+                    const key = window.EJS_gameName + ".state";
+                    
+                    // DB 저장은 비동기로 처리 (UI 멈춤 방지)
+                    LocalStateStore.save(key, blob).then(success => {
+                        if(success === true) console.log("✅ DB Save Success");
+                        else console.error("❌ DB Save Failed");
+                    });
+                    
+                    // 사용자에게는 토스트 메시지 즉시 표시
+                    showToast("💾 상태 저장 완료!");
+                } else {
+                    console.error("❌ Invalid State Data:", data);
+                    // 데이터가 없어도 에뮬레이터 에러 메시지를 막기 위해 true 반환 고려
+                }
+                
+                // [핵심] 반드시 true를 반환해야 에뮬레이터가 "성공"으로 처리함
+                return true; 
+            };
+
+            window.EJS_onLoadState = async function() {
+                const key = window.EJS_gameName + ".state";
+                try {
+                    const data = await LocalStateStore.load(key);
+                    if (data) {
+                        showToast("📂 상태 로드 완료!");
+                        return data; 
+                    } else {
+                        showToast("⚠️ 저장된 상태가 없습니다.", true);
+                        return null;
+                    }
+                } catch(e) {
+                    console.error(e);
+                    return null;
+                }
+            };
+            
+            window.EJS_startOnLoaded = true;
+            window.EJS_fullscreenOnLoaded = false;
+            window.EJS_backgroundColor = '#000'
             
             const coreVersion = localStorage.getItem('coreVersion') || Date.now();
             const loader = document.createElement('script');
@@ -1000,6 +1165,9 @@
 
                 window.EJS_emulator = null;
                 window.EJS_gameName = null;
+                // [청소] 전역 훅 제거
+                window.EJS_onSaveState = null;
+                window.EJS_onLoadState = null;
             } catch(e) { console.error("Cleanup error:", e); }
         },
 
@@ -1007,14 +1175,32 @@
             window.EJS_ready = () => {
                 console.log("✅ [EJS] Core Ready.");
                 if (window.EJS_emulator) {
-                    window.EJS_emulator.on("saveState", this.handleSaveState);
-                    window.EJS_emulator.on("loadState", this.handleLoadState); 
+                    // [수정] State 관련 리스너 제거, 게임 세이브(SRAM)만 유지
                     window.EJS_emulator.on("save", this.handleGameSave);
                 }
             };
 
             window.EJS_onGameStart = () => {
                 console.log("🚀 [EJS] Game Started!");
+                
+                try {
+                    const FS = window.EJS_emulator.Module.FS;
+                    // 필요한 경로들을 순차적으로 확인 및 생성
+                    const dirs = [
+                        '/home/web_user/retroarch', 
+                        '/home/web_user/retroarch/userdata', 
+                        '/home/web_user/retroarch/userdata/states'
+                    ];
+                    
+                    dirs.forEach(dir => {
+                        try {
+                            try { FS.stat(dir); } catch(e) { FS.mkdir(dir); console.log("Created dir:", dir); }
+                        } catch(e) { console.warn("Dir check failed:", dir); }
+                    });
+                } catch(e) {
+                    console.error("FS Init Error:", e);
+                }
+
                 setTimeout(() => {
                     const canvas = document.querySelector("#game canvas");
                     if (canvas) { canvas.tabIndex = 0; canvas.focus(); } 
@@ -1040,10 +1226,8 @@
 
         startSaveMonitor: function() {
             if (this.monitorInterval) clearInterval(this.monitorInterval);
-            // [최적화] 5초 -> 30초로 주기 변경 (메인 스레드 부하 감소)
             this.monitorInterval = setInterval(async () => {
                 if (document.hidden) return;
-                // [최적화] 이미 저장 중이거나 에뮬레이터가 준비되지 않았으면 스킵
                 if (this.isSaving || !window.EJS_emulator?.Module?.FS || !this.currentSavePath) return;
                 
                 try {
@@ -1062,7 +1246,7 @@
                         await this.exportSave(true); 
                     }
                 } catch (e) {}
-            }, 30000); // 30초마다 확인
+            }, 30000); 
         },
 
         injectSaveData: async function(shouldReload = false) {
@@ -1092,27 +1276,15 @@
             }
         },
 
-        importSave: async function() {
-            if (!confirm("⚠️ 주의: 현재 상태가 서버 데이터로 덮어씌워집니다.")) return;
-            const data = await this.fetchSaveData(window.EJS_gameName + ".sav");
-            if (!data) { showToast("⚠️ 서버에 저장된 파일 없음", true); return; }
-
-            const FS = window.EJS_emulator.Module.FS;
-            FS.writeFile(this.currentSavePath, data);
-            if (window.EJS_emulator.gameManager?.loadSaveFiles) window.EJS_emulator.gameManager.loadSaveFiles();
-            showToast(`✅ 세이브 가져오기 성공!`);
-        },
-
         exportSave: async function(skipFlush = false) {
             if (!window.EJS_emulator?.gameManager) return;
-            if (this.isSaving) return; // 중복 실행 방지
+            if (this.isSaving) return; 
             
             this.isSaving = true;
 
             try {
                 if (!skipFlush && window.EJS_emulator.gameManager.saveSaveFiles) window.EJS_emulator.gameManager.saveSaveFiles();
                 
-                // getSaveFile()은 동기적으로 실행되며 큰 데이터 처리 시 렉 유발 가능
                 const data = window.EJS_emulator.gameManager.getSaveFile();
                 if (!data) { 
                     if(!skipFlush) showToast("⚠️ 저장할 데이터 없음", true); 
@@ -1127,7 +1299,7 @@
             } catch (e) { 
                 console.error("Export Error:", e); 
             } finally {
-                this.isSaving = false; // 플래그 해제
+                this.isSaving = false; 
             }
         },
 
@@ -1135,22 +1307,6 @@
             let data = event.content || event;
             if (!data) return;
             if(await Launcher.uploadSaveData(window.EJS_gameName + ".sav", data)) showToast("💾 자동 저장 완료!");
-        },
-
-        handleSaveState: async function(event) {
-            let data = event.state || (event.length > 1 ? event[1] : event);
-            if (!data) return;
-            if(await Launcher.uploadSaveData(window.EJS_gameName + ".state", data)) showToast("💾 상태 저장 완료!");
-            else showToast("❌ 상태 저장 실패", true);
-        },
-
-        handleLoadState: async function() {
-            const data = await Launcher.fetchSaveData(window.EJS_gameName + ".state");
-            if (!data) { alert("⚠️ 저장된 상태 파일이 없습니다."); return; }
-            if (window.EJS_emulator.gameManager?.loadState) {
-                window.EJS_emulator.gameManager.loadState(data);
-                showToast("📂 상태 로드 완료!");
-            }
         },
 
         uploadSaveData: async function(filename, data) {
@@ -1169,7 +1325,7 @@
             } catch (e) { return null; }
         }
     };
-
+	
     window.addEventListener('keydown', (e) => {
         if (e.key === "F5" || e.key === "Escape") {
             e.preventDefault(); e.stopPropagation();
