@@ -996,7 +996,7 @@ run: async function(sys, rom) {
             window.EJS_gamepad = true;
 
 			// 시스템 체크 (가독성을 위해 배열 includes 사용 권장, 기존 로직 유지)
-			if (sys === 'nds' || sys === 'neogeo' || sys === 'gba' || sys === 'cps123') {
+			if (sys === 'nds' || sys === 'neogeo' || sys === 'gba') {
 				window.EJS_defaultControls = {
 					0: {
 						0: { 'value': 'x', 'value2': 'BUTTON_2' },
