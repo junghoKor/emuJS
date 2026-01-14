@@ -123,7 +123,7 @@
             line-height: 1.2; color: var(--text-color);
         }
 
-        /* Badge & Gauge */
+        /* Badge & Gauge - DOM 최적화 및 스타일 변경 */
         .last-played-badge {
             position: absolute; top: -8px; right: -5px;
             background: #7CB342; color: white;
@@ -132,13 +132,39 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             z-index: 10; animation: bounceIn 0.5s;
         }
+        
+        /* [수정] 게이지 컨테이너: 고정된 그라데이션 배경 + 도트 마스크 */
         .size-gauge {
             position: absolute; bottom: 3px; left: 8px; right: 8px;
-            width: auto; height: 2px;
-            display: flex; flex-direction: row-reverse; justify-content: flex-start; gap: 1px;
-            pointer-events: none;
+            
+            /* 높이 2px 강제 고정 */
+            height: 2px;
+            min-height: 2px;
+            max-height: 2px;
+            
+            border-radius: 1px;
+            overflow: hidden;
+            
+            /* 배경: 좌측(빨강) <-> 우측(파랑) 고정 그라데이션 */
+            /* 우측에서 좌측으로 증가하므로, 시작점(우측)이 파랑이어야 함 */
+            background: linear-gradient(to left, hsl(240, 90%, 60%), hsl(0, 90%, 60%));
+            
+            /* 도트 마스크: 20칸 효과 (검정=보임, 투명=구멍) */
+            /* 100% / 20칸 = 5% 간격. 4% 바 + 1% 공백 */
+            mask-image: repeating-linear-gradient(90deg, #000 0%, #000 4%, transparent 4%, transparent 5%);
+            -webkit-mask-image: repeating-linear-gradient(90deg, #000 0%, #000 4%, transparent 4%, transparent 5%);
         }
-        .gauge-dot { flex: 1; height: 2px; border-radius: 1px; background-color: #EEE; transition: background-color 0.3s; }
+        
+        /* [수정] 가림막: 왼쪽(빈 공간)을 회색으로 덮음 */
+        .gauge-cover {
+            height: 100%;
+            background-color: #EEE; /* 빈 도트 색상 */
+            position: absolute;
+            left: 0;
+            top: 0;
+            z-index: 1; /* 그라데이션 위에 덮어씀 */
+            transition: width 0.3s ease;
+        }
 
         /* =========================================
            5. Game View Overlay
@@ -263,7 +289,7 @@
             <button class="btn" onclick="App.downloadCores()">📥 코어 동기화</button>
         </div>
     </header>
-    <div id="content"></div>
+    <div id="content"><!-- SERVER_RENDERED_CONTENT --></div>
 </div>
 
 <div id="game-view">
@@ -365,15 +391,32 @@
         cachedRoms: null,       
         inGame: false,          
         deleteTarget: null,     
-        cursorTimer: null,      
+        cursorTimer: null,
+        serverHtml: "",      // [SSR] 캐시된 서버 렌더링 HTML 저장
+        isLongPress: false,  // [SSR] 롱프레스 상태 관리
         
         init: function() {
+            // [Fix] 브라우저의 자동 스크롤 복원 방지 (우리가 직접 제어)
+            if ('scrollRestoration' in history) {
+                history.scrollRestoration = 'manual';
+            }
+
             this.updateSystemInfo();
+
+            // [SSR] 서버에서 렌더링된 HTML을 메모리에 캐시
+            const contentDiv = document.getElementById('content');
+            if (contentDiv && contentDiv.innerHTML.trim().length > 0) {
+                this.serverHtml = contentDiv.innerHTML;
+            }
+
             const lastView = localStorage.getItem('lastViewMode');
             if (lastView === 'bookmark') {
                 this.loadBookmarks();
             } else {
-                this.loadLibrary();
+                // 라이브러리 모드라면 이미 콘텐츠가 로드되어 있으므로 스타일만 적용
+                this.currentView = 'library';
+                localStorage.setItem('lastViewMode', 'library');
+                this.applyLastPlayedStyle();
             }
             this.setupCursorControl();
 
@@ -444,44 +487,22 @@
             else this.loadLibrary();
         },
 
-        loadLibrary: async function() {
+        loadLibrary: function() {
             this.currentView = 'library';
             localStorage.setItem('lastViewMode', 'library');
 
             const btn = document.getElementById('view-toggle-btn');
             if(btn) btn.innerText = "★ 즐겨찾기";
 
-            try {
-                const res = await fetch('/api/roms');
-                const data = await res.json();
-                this.cachedRoms = data;
-
-                const container = document.getElementById('content');
-                container.innerHTML = '';
-
-                Object.keys(data).forEach(sys => {
-                    if (!data[sys]?.length) return;
-                    const section = document.createElement('div');
-                    section.className = 'category';
-                    const count = data[sys].length;
-                    section.innerHTML = `<div class="category-title">${sys} <span class="game-count">(${count})</span></div>`;
-                    const grid = document.createElement('div');
-                    grid.className = 'rom-grid';
-                    
-                    data[sys].forEach(romData => {
-                        const card = this.createCard(sys, romData);
-                        grid.appendChild(card);
-                    });
-                    section.appendChild(grid);
-                    container.appendChild(section);
-                });
-
-                setTimeout(() => {
-                    const target = document.getElementById('last-played-target');
-                    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }, 300);
-
-            } catch (e) { console.error("Library load error:", e); }
+            const container = document.getElementById('content');
+            
+            // [SSR] 캐시된 HTML을 사용하여 즉시 렌더링 (JSON Fetch 제거)
+            if (this.serverHtml) {
+                container.innerHTML = this.serverHtml;
+                this.applyLastPlayedStyle();
+            } else {
+                container.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">로딩 중이거나 게임 파일이 없습니다.</div>';
+            }
         },
 
         loadBookmarks: async function() {
@@ -491,60 +512,26 @@
             const btn = document.getElementById('view-toggle-btn');
             if(btn) btn.innerText = "📚 모두보기";
 
+            const container = document.getElementById('content');
+            
             try {
-                if (!this.cachedRoms) {
-                    const r = await fetch('/api/roms');
-                    this.cachedRoms = await r.json();
-                }
-
-                const res = await fetch('/api/bookmark');
-                const bookmarks = await res.json();
-                const container = document.getElementById('content');
-                container.innerHTML = '';
-
-                if (!bookmarks || bookmarks.length === 0) {
-                     container.innerHTML = '<div style="text-align:center; padding:50px; color:#aaa;">즐겨찾기된 게임이 없습니다.</div>';
-                     return;
-                }
-
-                const grouped = {};
-                bookmarks.forEach(item => {
-                    const sys = item.system || "Unknown";
-                    if (!grouped[sys]) grouped[sys] = [];
-                    grouped[sys].push(item.rom); 
-                });
-
-                Object.keys(grouped).sort().forEach(sys => {
-                    const section = document.createElement('div');
-                    section.className = 'category';
-                    section.innerHTML = `<div class="category-title" style="border-left-color: #F57C00;">
-                        ${sys} <span class="game-count">(${grouped[sys].length})</span>
-                    </div>`;
-                    
-                    const grid = document.createElement('div');
-                    grid.className = 'rom-grid';
-                    
-                    grouped[sys].forEach(romName => {
-                        let romSize = 0;
-                        if (this.cachedRoms && this.cachedRoms[sys]) {
-                            const found = this.cachedRoms[sys].find(r => r.name === romName);
-                            if (found) romSize = found.size;
-                        }
-                        const card = this.createCard(sys, { name: romName, size: romSize });
-                        grid.appendChild(card);
-                    });
-                    
-                    section.appendChild(grid);
-                    container.appendChild(section);
-                });
+                // [SSR] 즐겨찾기 목록도 서버에서 렌더링된 HTML을 받아옴
+                const res = await fetch('/api/bookmark?format=html');
+                const html = await res.text();
+                
+                container.innerHTML = html;
+                this.applyLastPlayedStyle();
 
             } catch (e) {
                 console.error("Bookmark load error:", e);
+                container.innerHTML = '<div style="text-align:center; padding:50px; color:#aaa;">로딩 실패</div>';
                 showToast("즐겨찾기 로드 실패", true);
             }
         },
 
         createCard: function(sys, romData) {
+            // [SSR] 사용으로 인해 클라이언트 사이드 카드 생성 함수는 사실상 deprecated 상태이나
+            // 북마크 로직 등에서 혹시 모를 참조를 위해 유지합니다.
             let romName, romSize = 0;
             if (typeof romData === 'object' && romData !== null) {
                 romName = romData.name;
@@ -555,42 +542,31 @@
 
             const card = document.createElement('div');
             card.className = 'rom-card';
+            // 클라이언트 사이드 생성시에도 data 속성을 추가해줌
+            card.setAttribute('data-sys', sys);
+            card.setAttribute('data-rom', romName);
+            
             card.innerHTML = `<span class="rom-name">${romName.replace(/\.[^/.]+$/, "").toUpperCase()}</span>`;
             
+            // [최적화] Client-side fallback도 새로운 Cover 구조로 변경
             if (romSize > 0) {
                 const gauge = document.createElement('div');
                 gauge.className = 'size-gauge';
+                
                 const mb = romSize / (1024 * 1024);
                 let activeDots = Math.max(1, Math.min(20, Math.ceil(mb))); 
+                let percent = activeDots * 5;
+                let emptyPercent = 100 - percent; // 비어있는 비율 계산
 
-                for(let i=1; i<=20; i++) {
-                    const dot = document.createElement('div');
-                    dot.className = 'gauge-dot';
-                    if (i <= activeDots) {
-                        const hue = 240 - ((i - 1) / 19 * 240);
-                        dot.style.backgroundColor = `hsl(${hue}, 90%, 60%)`;
-                    }
-                    gauge.appendChild(dot);
-                }
+                const cover = document.createElement('div');
+                cover.className = 'gauge-cover';
+                cover.style.width = emptyPercent + '%'; // Cover 너비 설정
+                
+                gauge.appendChild(cover);
                 card.appendChild(gauge);
             }
-
-            try {
-                const globalLast = JSON.parse(localStorage.getItem('lastPlayedGlobal'));
-                let isGlobal = false;
-                
-                if (globalLast && globalLast.sys === sys && globalLast.rom === romName) {
-                    isGlobal = true;
-                    card.classList.add('last-played');
-                    card.id = 'last-played-target';
-                    this.addBadge(card);
-                }
-                if (!isGlobal) {
-                    const localLastRom = localStorage.getItem('lastPlayedLocal_' + sys);
-                    if (localLastRom === romName) this.addBadge(card);
-                }
-            } catch (e) {}
-
+            
+            // 기존 클라이언트 사이드 이벤트 바인딩 로직 유지 (폴백용)
             let longPressTimer;
             let isLongPress = false;
 
@@ -621,6 +597,8 @@
         },
 
         addBadge: function(card) {
+            // 이미 뱃지가 있는지 확인
+            if (card.querySelector('.last-played-badge')) return;
             const badge = document.createElement('div');
             badge.className = 'last-played-badge';
             badge.innerText = "▶ LAST";
@@ -644,6 +622,87 @@
                 html += `<div class="ctx-item" onclick="App.removeBookmark('${safeSys}', '${safeRom}')"><span class="icon">💔</span> 즐겨찾기 해제</div>`;
             }
             menu.innerHTML = html;
+        },
+
+        // [SSR] 서버 렌더링 HTML용 컨텍스트 메뉴 핸들러
+        // [수정] pageX, pageY를 명시적으로 사용하여 위치 버그 수정
+        showCtx: function(e, sys, rom) {
+            e.preventDefault();
+            this.showContextMenu(e.pageX, e.pageY, sys, rom);
+        },
+
+        // [SSR] 서버 렌더링 HTML용 터치 핸들러 (Long Press 구현)
+        handleTouch: function(e, sys, rom) {
+            this.isLongPress = false;
+            const target = e.currentTarget;
+            
+            const timer = setTimeout(() => {
+                this.isLongPress = true;
+                if (navigator.vibrate) navigator.vibrate(50);
+                if (e.touches && e.touches[0]) {
+                    this.showContextMenu(e.touches[0].pageX, e.touches[0].pageY, sys, rom);
+                }
+            }, 800);
+
+            const clear = () => {
+                clearTimeout(timer);
+                target.removeEventListener('touchend', clear);
+                target.removeEventListener('touchmove', clear);
+            };
+
+            target.addEventListener('touchend', clear);
+            target.addEventListener('touchmove', clear);
+        },
+
+        // [수정] 시스템별 로컬 기록 및 전체 기록 반영
+        applyLastPlayedStyle: function() {
+             try {
+                // 1. 초기화 (기존 뱃지 및 스타일 제거)
+                document.querySelectorAll('.last-played').forEach(el => el.classList.remove('last-played'));
+                document.querySelectorAll('.last-played-badge').forEach(el => el.remove());
+                const oldTarget = document.getElementById('last-played-target');
+                if(oldTarget) oldTarget.removeAttribute('id');
+
+                // 2. Local Storage에서 정보 읽기
+                const globalLast = JSON.parse(localStorage.getItem('lastPlayedGlobal'));
+                
+                // 3. 시스템별 마지막 플레이 게임 뱃지 표시 (Local Last)
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key.startsWith('lastPlayedLocal_')) {
+                        const sys = key.replace('lastPlayedLocal_', '');
+                        const rom = localStorage.getItem(key);
+                        
+                        // 안전한 선택자 생성을 위한 이스케이프
+                        const safeSys = sys.replace(/["\\]/g, '\\$&'); 
+                        const safeRom = rom.replace(/["\\]/g, '\\$&');
+                        
+                        const selector = `.rom-card[data-sys="${safeSys}"][data-rom="${safeRom}"]`;
+                        const target = document.querySelector(selector);
+                        
+                        if (target) {
+                            this.addBadge(target);
+                        }
+                    }
+                }
+
+                // 4. 전체 마지막 플레이 게임 강조 및 스크롤 (Global Last)
+                if (globalLast && globalLast.sys && globalLast.rom) {
+                    const safeSys = globalLast.sys.replace(/["\\]/g, '\\$&');
+                    const safeRom = globalLast.rom.replace(/["\\]/g, '\\$&');
+                    const selector = `.rom-card[data-sys="${safeSys}"][data-rom="${safeRom}"]`;
+                    
+                    setTimeout(() => {
+                        const target = document.querySelector(selector);
+                        if (target) {
+                             target.classList.add('last-played');
+                             target.id = 'last-played-target';
+                             this.addBadge(target); // 뱃지가 없다면 추가
+                             target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }, 100);
+                }
+             } catch(e) { console.error("Style apply error", e); }
         },
 
         addBookmark: async function(sys, rom) {
@@ -698,7 +757,8 @@
                 
                 if (res.ok) {
                     showToast("🗑️ 파일이 삭제되었습니다.");
-                    this.loadLibrary(); 
+                    // 삭제 후 서버 HTML 캐시 갱신이 필요할 수 있으나, 단순 리로드 권장
+                    location.reload(); 
                 } else { showToast("삭제 실패 (서버 오류)", true); }
             } catch(e) { showToast("오류 발생", true); }
         },
@@ -912,7 +972,13 @@
         lastSaveMtime: 0,
         isSaving: false,
 
-run: async function(sys, rom) {
+        run: async function(sys, rom) {
+            // [SSR] 롱프레스 직후라면 실행 취소
+            if (App.isLongPress) {
+                App.isLongPress = false;
+                return;
+            }
+
             App.inGame = true;
             if (document.activeElement) document.activeElement.blur();
             window.focus();
@@ -996,7 +1062,7 @@ run: async function(sys, rom) {
             window.EJS_gamepad = true;
 
 			// 시스템 체크 (가독성을 위해 배열 includes 사용 권장, 기존 로직 유지)
-			if (sys === 'nds' || sys === 'neogeo' || sys === 'gba') {
+			if (sys === 'nds' || sys === 'neogeo' || sys === 'gba' ) {
 				window.EJS_defaultControls = {
 					0: {
 						0: { 'value': 'x', 'value2': 'BUTTON_2' },
@@ -1327,9 +1393,14 @@ run: async function(sys, rom) {
     };
 	
     window.addEventListener('keydown', (e) => {
-        if (e.key === "F5" || e.key === "Escape") {
-            e.preventDefault(); e.stopPropagation();
-            location.reload();
+        if (e.key === "Escape") {
+            if (App.inGame) {
+                e.preventDefault(); e.stopPropagation();
+                App.closeGame();
+            }
+        } else if (e.key === "F5") {
+             e.preventDefault(); e.stopPropagation();
+             location.reload();
         }
     }, { capture: true });
 
