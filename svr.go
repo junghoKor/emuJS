@@ -101,33 +101,33 @@ func handleDiskInfo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]uint64{"free": free, "total": total})
 }
 
-// [수정] 카드 HTML 생성 (DOM 최적화 적용)
-// 1. 20개의 div 루프 제거 -> 단일 div + width% 로 변경
-// 2. data-sys, data-rom 속성 유지 (클라이언트 로직용)
+// [수정] 카드 HTML 생성: Cover 방식으로 로직 변경
 func writeCardHTML(sb *strings.Builder, sys, romName string, size int64) {
 	romNameDisp := strings.TrimSuffix(romName, filepath.Ext(romName))
 	romNameDisp = strings.ToUpper(romNameDisp)
 	
 	// 사이즈 게이지 계산
-	// 최대 20MB를 100%로 가정 (1MB당 1칸, 최대 20칸)
+	// 최대 20MB를 100%로 가정
 	mb := float64(size) / (1024 * 1024)
-	activeDots := int(math.Max(1, math.Min(20, math.Ceil(mb))))
-	
-	// [수정] 채우는 방식이 우측->좌측이므로, '비어있는 좌측 공간(Gray Cover)'의 비율을 계산
-	percent := activeDots * 5
-	emptyPercent := 100 - percent
+	percent := math.Min(100, (mb/20.0)*100)
+	if percent < 5 { percent = 5 } // 최소값
+
+	// [중요] 가림막(Cover)의 너비를 계산
+	// 파일 크기(percent)가 100%면 Cover는 0%가 되어 전체 그라데이션이 보임
+	// 파일 크기가 10%면 Cover는 90%가 되어 오른쪽 10%만 보임
+	coverPercent := 100 - percent
 
 	// 따옴표(') 처리
 	safeSys := strings.ReplaceAll(sys, "'", "\\'")
 	safeRom := strings.ReplaceAll(romName, "'", "\\'")
 
-	// [수정] gauge-bar 대신 gauge-cover 사용
+	// 구조: .size-gauge(배경 그라데이션) > .gauge-cover(회색 가림막)
 	sb.WriteString(fmt.Sprintf(
 		`<div class="rom-card" data-sys="%s" data-rom="%s" onclick="Launcher.run('%s', '%s')" oncontextmenu="App.showCtx(event, '%s', '%s')" ontouchstart="App.handleTouch(event, '%s', '%s')">`+
 		`<span class="rom-name">%s</span>`+
-		`<div class="size-gauge"><div class="gauge-cover" style="width:%d%%"></div></div>`+
+		`<div class="size-gauge"><div class="gauge-cover" style="width:%.1f%%"></div></div>`+
 		`</div>`, 
-		safeSys, safeRom, safeSys, safeRom, safeSys, safeRom, safeSys, safeRom, romNameDisp, emptyPercent))
+		safeSys, safeRom, safeSys, safeRom, safeSys, safeRom, safeSys, safeRom, romNameDisp, coverPercent))
 }
 
 // [수정] 롬 목록 HTML 생성기

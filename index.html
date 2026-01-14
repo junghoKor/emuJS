@@ -94,15 +94,18 @@
             gap: 8px;
         }
 
+        /* [수정] ROM Card: 패딩 및 정렬 정밀 조정 */
         .rom-card { 
             background: var(--card-bg); 
-            padding: 5px 8px 10px 8px; 
-            border-radius: 8px; 
+            /* 하단 패딩 14px: 텍스트(약 12px) + 간격 + 게이지(2px) + 여백(8px) 확보 */
+            padding: 8px 10px 14px 10px; 
+            border-radius: 6px; 
             text-align: center; cursor: pointer; 
             border: 1px solid #E0E0E0;
             transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+            
             display: flex; flex-direction: column; justify-content: center; align-items: center;
-            min-height: auto; 
+            
             box-shadow: 0 2px 4px rgba(0,0,0,0.04);
             position: relative; 
             
@@ -118,12 +121,14 @@
             background: #F1F8E9; border: 2px solid #7CB342;
             transform: translateY(-2px); box-shadow: 0 4px 8px rgba(124, 179, 66, 0.3);
         }
+        
         .rom-name { 
             font-weight: 600; word-break: break-all; font-size: 0.8rem; 
-            line-height: 1.2; color: var(--text-color);
+            line-height: 1.25; color: var(--text-color);
+            margin-bottom: 2px; /* 게이지와의 최소 간격 */
         }
 
-        /* Badge & Gauge - DOM 최적화 및 스타일 변경 */
+        /* Badge */
         .last-played-badge {
             position: absolute; top: -8px; right: -5px;
             background: #7CB342; color: white;
@@ -133,36 +138,37 @@
             z-index: 10; animation: bounceIn 0.5s;
         }
         
-        /* [수정] 게이지 컨테이너: 고정된 그라데이션 배경 + 도트 마스크 */
+        /* [수정] 게이지 컨테이너: 2px 강제 고정 및 위치 설정 */
         .size-gauge {
-            position: absolute; bottom: 3px; left: 8px; right: 8px;
+            position: absolute; 
+            bottom: 6px;  /* 하단에서 6px 위 */
+            left: 10px;   /* 카드 패딩과 동일 */
+            right: 10px; 
             
-            /* 높이 2px 강제 고정 */
-            height: 2px;
+            /* 높이 강제 고정 (flex 아이템 영향 방지) */
+            height: 2px !important;
             min-height: 2px;
             max-height: 2px;
+            line-height: 0;
+            font-size: 0;
             
             border-radius: 1px;
             overflow: hidden;
             
-            /* 배경: 좌측(빨강) <-> 우측(파랑) 고정 그라데이션 */
-            /* 우측에서 좌측으로 증가하므로, 시작점(우측)이 파랑이어야 함 */
-            background: linear-gradient(to left, hsl(240, 90%, 60%), hsl(0, 90%, 60%));
-            
-            /* 도트 마스크: 20칸 효과 (검정=보임, 투명=구멍) */
-            /* 100% / 20칸 = 5% 간격. 4% 바 + 1% 공백 */
-            mask-image: repeating-linear-gradient(90deg, #000 0%, #000 4%, transparent 4%, transparent 5%);
-            -webkit-mask-image: repeating-linear-gradient(90deg, #000 0%, #000 4%, transparent 4%, transparent 5%);
+            /* [핵심] 배경: 좌측(Red) <-> 우측(Green) 전체 그라데이션 */
+            /* 파일이 클수록(가림막이 줄어들수록) 왼쪽의 빨간색이 드러남 */
+            background: linear-gradient(to right, #FF1744, #FFEA00, #00E676);
+            z-index: 1;
         }
         
-        /* [수정] 가림막: 왼쪽(빈 공간)을 회색으로 덮음 */
+        /* [수정] 가림막: 왼쪽부터 덮어서 용량 표현 */
         .gauge-cover {
-            height: 100%;
-            background-color: #EEE; /* 빈 도트 색상 */
             position: absolute;
-            left: 0;
             top: 0;
-            z-index: 1; /* 그라데이션 위에 덮어씀 */
+            left: 0; /* 왼쪽부터 시작 */
+            height: 100%;
+            background-color: #EEEEEE; /* 비어있는 구간 색상 (카드 배경과 구분) */
+            z-index: 2; /* 그라데이션 위에 덮기 */
             transition: width 0.3s ease;
         }
 
@@ -174,11 +180,10 @@
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             width: 100%; height: 100%;
             background: #000; z-index: 1000;
-            cursor: none; /* 기본 커서 숨김 */
+            cursor: none; 
         }
         #game-view.show-cursor { cursor: default; }
 
-        /* 상단 컨트롤 버튼 공통 */
         .game-ctrl-btn {
             position: absolute; top: 10px; z-index: 2000;
             background: transparent; border: none; cursor: pointer;
@@ -192,19 +197,16 @@
         #refresh-btn {
             right: max(10px, env(safe-area-inset-right));
         }
-        /* [요청사항 반영] 나가기 버튼 2배 확대 */
         #refresh-btn svg { width: 80px; height: 80px; }
         
         #fs-check-btn {
             right: max(60px, env(safe-area-inset-right));
-            /* [요청사항 반영] 폴더 구조 버튼 숨김 */
             display: none !important;
         }
 
         /* =========================================
-           6. Components (Toast, Menu, Modal)
+           6. Components
            ========================================= */
-        /* Toast */
         #toast {
             visibility: hidden; min-width: 250px;
             background-color: rgba(20, 20, 20, 0.6); 
@@ -221,7 +223,6 @@
         }
         #toast.show { visibility: visible; opacity: 1; bottom: 50px; transform: translateX(-50%) translateY(0); }
 
-        /* Context Menu */
         #context-menu {
             display: none; position: absolute; z-index: 3000;
             background: white; border-radius: 8px;
@@ -237,7 +238,6 @@
         .ctx-item.delete:hover { background-color: #ffebee; }
         .icon { width: 16px; text-align: center; }
 
-        /* Password Modal */
         .modal-overlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.7); z-index: 4000;
@@ -257,7 +257,6 @@
         .modal-input:focus { border-color: var(--primary-color); outline: none; }
         .modal-btns { display: flex; gap: 10px; justify-content: center; }
 
-        /* FS Modal 스타일 */
         #fs-modal .modal-box {
             width: 85%; max-width: 600px; height: 70vh;
             display: flex; flex-direction: column;
@@ -271,7 +270,6 @@
             user-select: text; -webkit-user-select: text; 
         }
 
-        /* Animations */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes bounceIn { 0% { transform: scale(0); } 80% { transform: scale(1.1); } 100% { transform: scale(1.1); } }
     </style>
@@ -293,13 +291,13 @@
 </div>
 
 <div id="game-view">
-    <button id="fs-check-btn" class="game-ctrl-btn" onclick="App.checkFS()" title="파일 시스템 확인(Check FS)">
+    <button id="fs-check-btn" class="game-ctrl-btn" onclick="App.checkFS()" title="파일 시스템 확인">
         <svg viewBox="0 0 24 24">
             <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-5 3c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm4 8h-8v-1c0-1.33 2.67-2 4-2s4 .67 4 2v1z"/>
         </svg>
     </button>
     
-    <button id="refresh-btn" class="game-ctrl-btn" onclick="App.closeGame()" title="나가기(Exit)">
+    <button id="refresh-btn" class="game-ctrl-btn" onclick="App.closeGame()" title="나가기">
         <svg viewBox="0 0 24 24">
             <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
         </svg>
@@ -333,11 +331,6 @@
 </div>
 
 <script>
-    /**
-     * =========================================================
-     * [설정 및 상수 정의]
-     * =========================================================
-     */
     const coreMap = { 
         neogeo: "fbneo",
         fbneo:  "fbneo", 
@@ -365,11 +358,8 @@
         }
     };
 
-    // [중요] 인젝트 설정: 시스템별 병합할 파일 목록
     const INJECT = {
-        neogeo: [
-            "/data/bios/neogeo_small.zip" 
-        ]
+        neogeo: [ "/data/bios/neogeo_small.zip" ]
     };
 
     function showToast(message, isError = false) {
@@ -381,29 +371,22 @@
         setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 1500);
     }
 
-    /**
-     * =========================================================
-     * [App] UI 및 비즈니스 로직
-     * =========================================================
-     */
     const App = {
         currentView: 'library', 
         cachedRoms: null,       
         inGame: false,          
         deleteTarget: null,     
         cursorTimer: null,
-        serverHtml: "",      // [SSR] 캐시된 서버 렌더링 HTML 저장
-        isLongPress: false,  // [SSR] 롱프레스 상태 관리
+        serverHtml: "",      
+        isLongPress: false, 
         
         init: function() {
-            // [Fix] 브라우저의 자동 스크롤 복원 방지 (우리가 직접 제어)
             if ('scrollRestoration' in history) {
                 history.scrollRestoration = 'manual';
             }
 
             this.updateSystemInfo();
 
-            // [SSR] 서버에서 렌더링된 HTML을 메모리에 캐시
             const contentDiv = document.getElementById('content');
             if (contentDiv && contentDiv.innerHTML.trim().length > 0) {
                 this.serverHtml = contentDiv.innerHTML;
@@ -413,14 +396,11 @@
             if (lastView === 'bookmark') {
                 this.loadBookmarks();
             } else {
-                // 라이브러리 모드라면 이미 콘텐츠가 로드되어 있으므로 스타일만 적용
                 this.currentView = 'library';
                 localStorage.setItem('lastViewMode', 'library');
                 this.applyLastPlayedStyle();
             }
             this.setupCursorControl();
-
-            // [추가] iPad/iOS 리스트 화면 풀스크린 설정 호출
             this.setupListFullscreen();
 
             document.addEventListener('click', () => {
@@ -430,13 +410,11 @@
             });
         },
 
-        // [추가] 리스트 화면에서 첫 터치 시 전체 화면 전환 (노치/상태바 제거)
         setupListFullscreen: function() {
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
             if (!isIOS) return;
 
             const enterFullscreen = () => {
-                // 게임 중이거나 이미 전체 화면이면 중단
                 if (this.inGame || document.fullscreenElement || document.webkitFullscreenElement) return;
 
                 const doc = document.documentElement;
@@ -447,11 +425,9 @@
                 }
             };
 
-            // 사용자 인터랙션(터치/클릭)이 발생할 때 전체 화면 시도
             const events = ['touchstart', 'click'];
             const handler = () => {
                 enterFullscreen();
-                // 한 번 실행 후 리스너 제거 (불필요한 호출 방지)
                 events.forEach(ev => document.body.removeEventListener(ev, handler));
             };
 
@@ -460,7 +436,6 @@
 
         setupCursorControl: function() {
             const view = document.getElementById('game-view');
-            // [최적화] 마우스 이동 이벤트에 딜레이를 주어 과도한 호출 방지
             view.addEventListener('mousemove', () => {
                 view.classList.add('show-cursor');
                 if (this.cursorTimer) clearTimeout(this.cursorTimer);
@@ -496,7 +471,6 @@
 
             const container = document.getElementById('content');
             
-            // [SSR] 캐시된 HTML을 사용하여 즉시 렌더링 (JSON Fetch 제거)
             if (this.serverHtml) {
                 container.innerHTML = this.serverHtml;
                 this.applyLastPlayedStyle();
@@ -515,7 +489,6 @@
             const container = document.getElementById('content');
             
             try {
-                // [SSR] 즐겨찾기 목록도 서버에서 렌더링된 HTML을 받아옴
                 const res = await fetch('/api/bookmark?format=html');
                 const html = await res.text();
                 
@@ -523,15 +496,13 @@
                 this.applyLastPlayedStyle();
 
             } catch (e) {
-                console.error("Bookmark load error:", e);
                 container.innerHTML = '<div style="text-align:center; padding:50px; color:#aaa;">로딩 실패</div>';
                 showToast("즐겨찾기 로드 실패", true);
             }
         },
 
+        // [수정] 클라이언트 사이드 카드 생성 함수 (동기화)
         createCard: function(sys, romData) {
-            // [SSR] 사용으로 인해 클라이언트 사이드 카드 생성 함수는 사실상 deprecated 상태이나
-            // 북마크 로직 등에서 혹시 모를 참조를 위해 유지합니다.
             let romName, romSize = 0;
             if (typeof romData === 'object' && romData !== null) {
                 romName = romData.name;
@@ -542,31 +513,31 @@
 
             const card = document.createElement('div');
             card.className = 'rom-card';
-            // 클라이언트 사이드 생성시에도 data 속성을 추가해줌
             card.setAttribute('data-sys', sys);
             card.setAttribute('data-rom', romName);
             
             card.innerHTML = `<span class="rom-name">${romName.replace(/\.[^/.]+$/, "").toUpperCase()}</span>`;
             
-            // [최적화] Client-side fallback도 새로운 Cover 구조로 변경
             if (romSize > 0) {
                 const gauge = document.createElement('div');
                 gauge.className = 'size-gauge';
                 
+                // 20MB 기준 (Server Logic과 동일)
                 const mb = romSize / (1024 * 1024);
-                let activeDots = Math.max(1, Math.min(20, Math.ceil(mb))); 
-                let percent = activeDots * 5;
-                let emptyPercent = 100 - percent; // 비어있는 비율 계산
+                let percent = Math.min(100, (mb / 20.0) * 100);
+                if (percent < 5) percent = 5;
+                
+                // 가림막 방식: Cover의 너비 = 100 - percent
+                const coverPercent = 100 - percent;
 
                 const cover = document.createElement('div');
                 cover.className = 'gauge-cover';
-                cover.style.width = emptyPercent + '%'; // Cover 너비 설정
+                cover.style.width = coverPercent + '%';
                 
                 gauge.appendChild(cover);
                 card.appendChild(gauge);
             }
             
-            // 기존 클라이언트 사이드 이벤트 바인딩 로직 유지 (폴백용)
             let longPressTimer;
             let isLongPress = false;
 
@@ -597,7 +568,6 @@
         },
 
         addBadge: function(card) {
-            // 이미 뱃지가 있는지 확인
             if (card.querySelector('.last-played-badge')) return;
             const badge = document.createElement('div');
             badge.className = 'last-played-badge';
@@ -624,14 +594,11 @@
             menu.innerHTML = html;
         },
 
-        // [SSR] 서버 렌더링 HTML용 컨텍스트 메뉴 핸들러
-        // [수정] pageX, pageY를 명시적으로 사용하여 위치 버그 수정
         showCtx: function(e, sys, rom) {
             e.preventDefault();
             this.showContextMenu(e.pageX, e.pageY, sys, rom);
         },
 
-        // [SSR] 서버 렌더링 HTML용 터치 핸들러 (Long Press 구현)
         handleTouch: function(e, sys, rom) {
             this.isLongPress = false;
             const target = e.currentTarget;
@@ -654,26 +621,21 @@
             target.addEventListener('touchmove', clear);
         },
 
-        // [수정] 시스템별 로컬 기록 및 전체 기록 반영
         applyLastPlayedStyle: function() {
              try {
-                // 1. 초기화 (기존 뱃지 및 스타일 제거)
                 document.querySelectorAll('.last-played').forEach(el => el.classList.remove('last-played'));
                 document.querySelectorAll('.last-played-badge').forEach(el => el.remove());
                 const oldTarget = document.getElementById('last-played-target');
                 if(oldTarget) oldTarget.removeAttribute('id');
 
-                // 2. Local Storage에서 정보 읽기
                 const globalLast = JSON.parse(localStorage.getItem('lastPlayedGlobal'));
                 
-                // 3. 시스템별 마지막 플레이 게임 뱃지 표시 (Local Last)
                 for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i);
                     if (key.startsWith('lastPlayedLocal_')) {
                         const sys = key.replace('lastPlayedLocal_', '');
                         const rom = localStorage.getItem(key);
                         
-                        // 안전한 선택자 생성을 위한 이스케이프
                         const safeSys = sys.replace(/["\\]/g, '\\$&'); 
                         const safeRom = rom.replace(/["\\]/g, '\\$&');
                         
@@ -686,7 +648,6 @@
                     }
                 }
 
-                // 4. 전체 마지막 플레이 게임 강조 및 스크롤 (Global Last)
                 if (globalLast && globalLast.sys && globalLast.rom) {
                     const safeSys = globalLast.sys.replace(/["\\]/g, '\\$&');
                     const safeRom = globalLast.rom.replace(/["\\]/g, '\\$&');
@@ -697,7 +658,7 @@
                         if (target) {
                              target.classList.add('last-played');
                              target.id = 'last-played-target';
-                             this.addBadge(target); // 뱃지가 없다면 추가
+                             this.addBadge(target); 
                              target.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         }
                     }, 100);
@@ -757,7 +718,6 @@
                 
                 if (res.ok) {
                     showToast("🗑️ 파일이 삭제되었습니다.");
-                    // 삭제 후 서버 HTML 캐시 갱신이 필요할 수 있으나, 단순 리로드 권장
                     location.reload(); 
                 } else { showToast("삭제 실패 (서버 오류)", true); }
             } catch(e) { showToast("오류 발생", true); }
@@ -870,16 +830,6 @@
         }
     };
 
- /**
-     * =========================================================
-     * [IndexedDB] 로컬 State 저장소 (대용량 바이너리 저장 지원)
-     * =========================================================
-     */
-/**
-     * =========================================================
-     * [IndexedDB] 로컬 State 저장소 (디버깅 강화판)
-     * =========================================================
-     */
     const LocalStateStore = {
         dbName: 'RetroArcade_States',
         storeName: 'states',
@@ -889,7 +839,6 @@
             return new Promise((resolve, reject) => {
                 if (this.db) return resolve(this.db);
                 
-                // 시크릿 모드 등에서 IndexedDB 사용 불가 체크
                 if (!window.indexedDB) {
                     alert("이 브라우저는 IndexedDB를 지원하지 않거나 차단되었습니다. (시크릿 모드 해제 필요)");
                     return reject("IndexedDB not supported");
@@ -923,7 +872,6 @@
                     const tx = this.db.transaction(this.storeName, 'readwrite');
                     const store = tx.objectStore(this.storeName);
                     
-                    // 데이터 유효성 검사
                     if (!data) {
                         console.error("❌ 저장할 데이터가 비어있습니다.");
                         return reject("Empty Data");
@@ -961,11 +909,6 @@
         }
     };
 
- /**
-     * =========================================================
-     * [Launcher] EmulatorJS 실행 및 관리 (최종 수정: State 오류 해결)
-     * =========================================================
-     */
     const Launcher = {
         monitorInterval: null,
         currentSavePath: null,
@@ -973,7 +916,6 @@
         isSaving: false,
 
         run: async function(sys, rom) {
-            // [SSR] 롱프레스 직후라면 실행 취소
             if (App.isLongPress) {
                 App.isLongPress = false;
                 return;
@@ -997,7 +939,6 @@
             document.getElementById('game-view').classList.remove('show-cursor');
             window.scrollTo(0, 0); 
 
-            // iOS Fullscreen
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
             if (isIOS) {
                 const doc = document.documentElement; 
@@ -1040,7 +981,6 @@
             window.EJS_pathtodata = CONFIG.paths.ejsData;
             window.EJS_coreUrl = window.EJS_pathtodata + "cores/"; 
             
-            // BIOS Inject
             if (INJECT[sys] && INJECT[sys].length > 0) {
                 showToast("⚙️ BIOS 병합 확인 중...", false);
                 try {
@@ -1061,7 +1001,6 @@
             window.EJS_fixedSaveInterval = 120000;
             window.EJS_gamepad = true;
 
-			// 시스템 체크 (가독성을 위해 배열 includes 사용 권장, 기존 로직 유지)
 			if (sys === 'nds' || sys === 'neogeo' || sys === 'gba' ) {
 				window.EJS_defaultControls = {
 					0: {
@@ -1092,7 +1031,7 @@
 					},
 					1: {}, 2: {}, 3: {}
 				};
-			} else {  // snes, shooting, mame
+			} else { 
 				window.EJS_defaultControls = {
 					0: {
 						0: { 'value': 'x', 'value2': 'BUTTON_1' },
@@ -1124,12 +1063,6 @@
 				};
 			}
 			
-			
-			
-            
- // [수정 1] 저장 위치를 'memory'로 변경
-            // 'none'은 저장을 아예 안 하게 만들고, 'browser'는 내부 DB 충돌 가능성이 있음.
-            // 'memory'로 하면 에뮬레이터는 성공했다고 판단하고 데이터를 우리에게 넘겨줌.
             window.EJS_defaultOptions = {
                 'shader': 'crt-easymode.glslp',
                 'save-state-location': 'memory', 
@@ -1141,11 +1074,9 @@
             window.EJS_graphic = "webgl";
             window.EJS_webgl2 = true;
             
-            // [수정 2] 훅 함수: 반환값 true 유지
             window.EJS_onSaveState = function(data) {
                 console.log("⚡ [Hook] EJS_onSaveState called.", data);
                 
-                // 데이터 추출
                 let blob = null;
                 if (data instanceof Uint8Array) {
                     blob = data;
@@ -1158,20 +1089,13 @@
                 if (blob) {
                     const key = window.EJS_gameName + ".state";
                     
-                    // DB 저장은 비동기로 처리 (UI 멈춤 방지)
                     LocalStateStore.save(key, blob).then(success => {
                         if(success === true) console.log("✅ DB Save Success");
                         else console.error("❌ DB Save Failed");
                     });
                     
-                    // 사용자에게는 토스트 메시지 즉시 표시
                     showToast("💾 상태 저장 완료!");
-                } else {
-                    console.error("❌ Invalid State Data:", data);
-                    // 데이터가 없어도 에뮬레이터 에러 메시지를 막기 위해 true 반환 고려
                 }
-                
-                // [핵심] 반드시 true를 반환해야 에뮬레이터가 "성공"으로 처리함
                 return true; 
             };
 
@@ -1231,7 +1155,6 @@
 
                 window.EJS_emulator = null;
                 window.EJS_gameName = null;
-                // [청소] 전역 훅 제거
                 window.EJS_onSaveState = null;
                 window.EJS_onLoadState = null;
             } catch(e) { console.error("Cleanup error:", e); }
@@ -1241,7 +1164,6 @@
             window.EJS_ready = () => {
                 console.log("✅ [EJS] Core Ready.");
                 if (window.EJS_emulator) {
-                    // [수정] State 관련 리스너 제거, 게임 세이브(SRAM)만 유지
                     window.EJS_emulator.on("save", this.handleGameSave);
                 }
             };
@@ -1251,7 +1173,6 @@
                 
                 try {
                     const FS = window.EJS_emulator.Module.FS;
-                    // 필요한 경로들을 순차적으로 확인 및 생성
                     const dirs = [
                         '/home/web_user/retroarch', 
                         '/home/web_user/retroarch/userdata', 
