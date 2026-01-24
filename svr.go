@@ -535,7 +535,7 @@ func handleCoreDownload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	coreFiles := []string{
-		"fbneo-wasm.data", "fbneo-thread-wasm.data", "fbneo-legacy-wasm.data",
+		"fbneo-wasm.data", "fbneo-thread-wasm.data", "fbneo-legacy-wasm.data", "fbneo-thread-legacy-wasm.data",
 		"mame2003_plus-wasm.data", "mame2003_plus-thread-wasm.data", "mame2003_plus-legacy-wasm.data",
 		"mgba-wasm.data", "mgba-thread-wasm.data", "mgba-legacy-wasm.data",
 		"melonds-wasm.data", "melonds-thread-wasm.data", "melonds-legacy-wasm.data",

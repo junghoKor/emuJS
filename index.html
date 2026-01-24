@@ -746,6 +746,14 @@
                 clearInterval(Launcher.monitorInterval);
                 Launcher.monitorInterval = null;
             }
+            
+            // [추가] Watchdog 정지
+            if (Launcher.gamepadWatchdog) {
+                // [수정] setInterval 해제 (기존 cancelAnimationFrame)
+                clearInterval(Launcher.gamepadWatchdog);
+                Launcher.gamepadWatchdog = null;
+            }
+
             App.inGame = false;
 
             try {
@@ -911,6 +919,7 @@
 
     const Launcher = {
         monitorInterval: null,
+        gamepadWatchdog: null, // [추가] 게임패드 폴링 루프 핸들
         currentSavePath: null,
         lastSaveMtime: 0,
         isSaving: false,
@@ -960,7 +969,7 @@
             window.EJS_player = "#game";
             window.EJS_core = selectedCore;
             window.EJS_gameName = newGameName;
-            window.EJS_DEBUG_XX = true;
+            window.EJS_DEBUG_XX = false;
             window.EJS_disableDatabases = false;
             
             window.EJS_paths = {
@@ -1070,9 +1079,9 @@
                 'webgl2Enabled': 'enabled',
             };
             
-            window.EJS_threads = false;
-            window.EJS_graphic = "webgl";
-            window.EJS_webgl2 = true;
+            // [수정] 멀티스레드 활성화 (svr.go에서 COOP/COEP 헤더 지원됨)
+            // 메인 스레드 부하 분산 -> 입력 끊김 현상 완화
+            window.EJS_threads = true;
             
             window.EJS_onSaveState = function(data) {
                 console.log("⚡ [Hook] EJS_onSaveState called.", data);
@@ -1128,6 +1137,38 @@
             this.setupEventHandlers();
 
             document.body.appendChild(loader);
+
+            // [추가] Gamepad Keep-Alive (입력 끊김 방지용 Watchdog)
+            // 브라우저가 게임패드 업데이트를 멈추지 않도록 강제 폴링
+            // -> setupEventHandlers 내부에서 게임 시작 시점으로 이동됨
+        },
+
+        // [수정] Watchdog 개선: requestAnimationFrame -> setInterval
+        // 화면 주사율(60Hz)과 관계없이 4ms(250Hz) 단위로 강제 폴링하여 입력 씹힘 방지
+        startGamepadWatchdog: function() {
+            if (this.gamepadWatchdog) clearInterval(this.gamepadWatchdog);
+            
+            console.log("🎮 Gamepad Watchdog Started (250Hz)");
+            
+            this.gamepadWatchdog = setInterval(() => {
+                if (!App.inGame) return;
+                
+                // Chrome 등의 브라우저는 getGamepads()를 주기적으로 호출하지 않으면
+                // 게임패드 이벤트를 Sleep 시키는 경향이 있음
+                if (navigator.getGamepads) {
+                    const gps = navigator.getGamepads();
+                    // [중요] Dummy Read: 단순히 호출하는 것보다 데이터를 실제로 '읽는' 행위가
+                    // 브라우저 최적화를 우회하는 데 도움이 됨
+                    if (gps) {
+                        for(let i=0; i<gps.length; i++) {
+                             // 성능을 위해 단순 읽기만 수행 (불필요한 할당 제거)
+                            if(gps[i] && gps[i].buttons) { 
+                                const _ = gps[i].buttons[0]; 
+                            }
+                        }
+                    }
+                }
+            }, 4); // 4ms = 250Hz Polling
         },
 
         cleanup: function() {
@@ -1146,6 +1187,13 @@
                     window.EJS_emulator.audio.context.close();
                 }
             } catch(e){}
+
+            // Watchdog 정리
+            if (this.gamepadWatchdog) {
+                clearInterval(this.gamepadWatchdog);
+                this.gamepadWatchdog = null;
+                console.log("🛑 Gamepad Watchdog Stopped");
+            }
 
             try {
                 const gameDiv = document.getElementById('game');
@@ -1207,6 +1255,8 @@
                 setTimeout(() => {
                     this.injectSaveData(true);
                     setTimeout(() => this.startSaveMonitor(), 2000);
+                    // [중요] 게임 시작 후 확실하게 Watchdog 실행
+                    this.startGamepadWatchdog();
                 }, 1000);
             };
         },
